@@ -44,6 +44,12 @@ export type AuditAction =
   | 'payment.webhook_rejected'
   | 'payout.scheduled'
   | 'download.issued'
+  // affiliate programme
+  | 'affiliate.program.saved'
+  | 'affiliate.joined'
+  | 'affiliate.approved'
+  | 'affiliate.rejected'
+  | 'affiliate.blocked'
   // hiring
   | 'demand.created'
   | 'demand.updated'

@@ -1,5 +1,6 @@
 import 'server-only';
 import { randomBytes } from 'node:crypto';
+import { cookies } from 'next/headers';
 import { db, type Prisma } from '@/server/db/client';
 import { requirePermission, requireUser } from '@/server/auth/rbac';
 import { audit } from '@/server/security/audit';
@@ -8,9 +9,41 @@ import { conflict, notFound, unavailable, validation } from '@/lib/errors';
 import { splitFee } from '@/lib/money';
 import { env, isPaymentsConfigured } from '@/lib/env';
 import { createPaymentIntent } from '@/server/payments/provider';
+import {
+  recordCommission,
+  resolveAttribution,
+  splitAffiliateShare,
+} from '@/server/services/affiliate-service';
+import { REFERRAL_COOKIE, parseReferralCookie } from '@/lib/affiliate';
 import { log } from '@/lib/logger';
 
 const logger = log('orders');
+
+/**
+ * Reads the referral cookie and turns it into an attribution, or nothing.
+ *
+ * Deliberately total: every failure path — absent cookie, tampered value,
+ * expired window, revoked affiliate, database hiccup — returns null. An
+ * affiliate commission is upside for the seller, and no part of it is worth
+ * failing a purchase the buyer is trying to complete.
+ */
+async function resolveCheckoutAttribution(productId: string, buyerId: string) {
+  try {
+    const jar = await cookies();
+    const parsed = parseReferralCookie(jar.get(REFERRAL_COOKIE)?.value);
+    if (!parsed) return null;
+
+    return await resolveAttribution(
+      parsed.code,
+      parsed.clickedAt,
+      productId,
+      buyerId
+    );
+  } catch (error) {
+    logger.warn({ err: error }, 'referral attribution failed; selling unattributed');
+    return null;
+  }
+}
 
 /**
  * Order and checkout service.
@@ -78,10 +111,23 @@ export async function startCheckout(productId: string): Promise<CheckoutResult> 
     throw conflict('Você já tem este produto na sua biblioteca.');
   }
 
-  const { feeCents, sellerCents } = splitFee(
+  const { feeCents, sellerCents: grossSellerCents } = splitFee(
     product.priceCents,
     env.PLATFORM_FEE_BPS
   );
+
+  // Referral attribution. Resolved once, here, and then frozen onto the order
+  // line — the commission a buyer's link earned must not change later because
+  // the creator edited the rate or revoked the affiliate.
+  const attribution = await resolveCheckoutAttribution(product.id, user.id);
+
+  const { affiliateCents, sellerCents } = attribution
+    ? splitAffiliateShare(
+        grossSellerCents,
+        attribution.commissionBps,
+        product.priceCents
+      )
+    : { affiliateCents: 0, sellerCents: grossSellerCents };
 
   const isFree = product.priceCents === 0;
 
@@ -115,6 +161,8 @@ export async function startCheckout(productId: string): Promise<CheckoutResult> 
             feeCents,
             sellerCents,
             sellerId: product.authorId,
+            affiliateId: attribution?.affiliateId ?? null,
+            affiliateCents,
           },
         },
       },
@@ -198,10 +246,13 @@ export async function settleOrderEffects(
       buyerId: true,
       items: {
         select: {
+          id: true,
           productId: true,
           productName: true,
           sellerId: true,
           sellerCents: true,
+          affiliateId: true,
+          affiliateCents: true,
         },
       },
     },
@@ -214,6 +265,29 @@ export async function settleOrderEffects(
       where: { id: item.productId },
       data: { salesCount: { increment: 1 } },
     });
+
+    // Commission is written in the same transaction as the payout, from the
+    // attribution frozen at checkout. Keyed to the order line, so a replayed
+    // webhook settles it once.
+    if (item.affiliateId && item.affiliateCents > 0) {
+      const commission = await recordCommission(tx, {
+        affiliateId: item.affiliateId,
+        orderItemId: item.id,
+        amountCents: item.affiliateCents,
+      });
+
+      if (commission) {
+        await tx.notification.create({
+          data: {
+            userId: commission.affiliateUserId,
+            type: 'SALE_COMPLETED',
+            title: 'Comissão de afiliado registrada',
+            body: `Uma venda de ${item.productName} foi atribuída ao seu link.`,
+            href: '/dashboard/affiliate',
+          },
+        });
+      }
+    }
 
     // Seller earnings settle D+15, matching the published commission terms.
     if (item.sellerCents > 0) {

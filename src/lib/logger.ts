@@ -12,18 +12,34 @@ import { env, isProduction } from './env';
 export const logger = pino({
   level: env.LOG_LEVEL,
   redact: {
+    // Redaction is central on purpose: a call site that has to remember to
+    // strip a secret is a call site that will eventually forget. New fields
+    // belong here, not in a `delete` at the point of logging.
     paths: [
       'password',
       'passwordHash',
       'token',
       'sessionToken',
       'secret',
+      'clientSecret',
+      'apiKey',
+      'authorization',
+      'cookie',
+      // Payment and referral identifiers. Not credentials, but they are
+      // bearer-ish: a leaked client secret completes a payment, and a leaked
+      // referral code lets someone hijack an attribution.
+      'referralCode',
       '*.password',
       '*.passwordHash',
       '*.token',
       '*.secret',
+      '*.clientSecret',
+      '*.apiKey',
+      '*.authorization',
+      '*.cookie',
       'req.headers.authorization',
       'req.headers.cookie',
+      'res.headers["set-cookie"]',
     ],
     censor: '[redacted]',
   },

@@ -1,51 +1,46 @@
 import type { NextConfig } from 'next';
 
 /**
- * Security headers applied to every response.
+ * Security headers are NOT set here.
  *
- * The CSP is intentionally strict. `'unsafe-inline'` is required for styles
- * because Next.js injects inline <style> tags for critical CSS; scripts do not
- * need it because we never use inline event handlers or inline <script> bodies
- * outside of Next's own nonce-less bootstrap, which is covered by
- * `'strict-dynamic'`-free `'self'` in production builds.
+ * They live in `src/middleware.ts`, because the CSP carries a per-request
+ * nonce and a static config can only ship a static policy — which in practice
+ * means `'unsafe-inline'` on script-src, and a CSP with `'unsafe-inline'` on
+ * script-src is not a CSP. Defining the policy in both places is worse than
+ * defining it in either: when two `Content-Security-Policy` headers are
+ * present the browser enforces both, so the static one would veto the very
+ * scripts the nonced one allows, and the site would break in a way that only
+ * shows up in production.
+ *
+ * The one header kept here is `X-Robots-Tag`, which is routing configuration
+ * rather than a security policy and has no per-request component.
  */
-const isDev = process.env.NODE_ENV === 'development';
 
-const contentSecurityPolicy = [
-  `default-src 'self'`,
-  // Next.js requires 'unsafe-inline' for its bootstrap script in dev, and
-  // 'unsafe-eval' for React Refresh. Neither is enabled in production.
-  `script-src 'self' ${isDev ? `'unsafe-inline' 'unsafe-eval'` : `'unsafe-inline'`} https://js.stripe.com`,
-  `style-src 'self' 'unsafe-inline'`,
-  `img-src 'self' blob: data: https:`,
-  `font-src 'self' data:`,
-  `object-src 'none'`,
-  `base-uri 'self'`,
-  `form-action 'self'`,
-  `frame-ancestors 'none'`,
-  `frame-src https://js.stripe.com https://hooks.stripe.com`,
-  `connect-src 'self' https://api.stripe.com`,
-  `upgrade-insecure-requests`,
-].join('; ');
+/**
+ * Origins allowed to invoke Server Actions.
+ *
+ * Next already rejects a Server Action whose `Origin` does not match `Host`,
+ * which is the CSRF defence. Behind a proxy that rewrites Host — which is
+ * exactly what Vercel and most ingress controllers do — that comparison can
+ * fail open or fail closed depending on headers we do not control, so the
+ * canonical origin is stated explicitly.
+ */
+function allowedOrigins(): string[] {
+  const configured = process.env.APP_URL ?? process.env.NEXT_PUBLIC_APP_URL;
+  if (!configured) return [];
 
-const securityHeaders = [
-  { key: 'Content-Security-Policy', value: contentSecurityPolicy },
-  { key: 'X-Content-Type-Options', value: 'nosniff' },
-  { key: 'X-Frame-Options', value: 'DENY' },
-  { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
-  {
-    key: 'Permissions-Policy',
-    value: 'camera=(), microphone=(), geolocation=(), interest-cohort=()',
-  },
-  {
-    key: 'Strict-Transport-Security',
-    value: 'max-age=63072000; includeSubDomains; preload',
-  },
-  { key: 'X-DNS-Prefetch-Control', value: 'on' },
-];
+  try {
+    return [new URL(configured).host];
+  } catch {
+    return [];
+  }
+}
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+
+  // Removes the `X-Powered-By: Next.js` banner. Version disclosure turns a
+  // future framework CVE into a targeted search rather than a broad scan.
   poweredByHeader: false,
 
   // Fail the production build on type or lint errors rather than shipping them.
@@ -53,9 +48,12 @@ const nextConfig: NextConfig = {
   eslint: { ignoreDuringBuilds: false },
 
   experimental: {
-    // Server Actions accept requests only from these origins.
     serverActions: {
+      // Uploads go straight to object storage through a signed URL, so no
+      // action body has a legitimate reason to be large. A tight limit is a
+      // cheap ceiling on memory-exhaustion attempts.
       bodySizeLimit: '2mb',
+      allowedOrigins: allowedOrigins(),
     },
   },
 
@@ -77,11 +75,8 @@ const nextConfig: NextConfig = {
   async headers() {
     return [
       {
-        source: '/:path*',
-        headers: securityHeaders,
-      },
-      {
-        // Private areas must never be indexed, regardless of robots.txt.
+        // Private areas must never be indexed, regardless of robots.txt. This
+        // is defence against accidental exposure, not against an attacker.
         source: '/(dashboard|admin|library|favorites|checkout|orders)/:path*',
         headers: [{ key: 'X-Robots-Tag', value: 'noindex, nofollow' }],
       },

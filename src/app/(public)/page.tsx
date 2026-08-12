@@ -171,6 +171,62 @@ function Hero() {
  * hidden from assistive technology and dropped entirely on small screens where
  * it would be illegible.
  */
+/**
+ * Catalogue sample shown inside the hero frame. Illustrative copy rather than
+ * live data: the hero renders above the fold on the highest-traffic page, and
+ * it must never wait on — or fail with — a database query.
+ */
+const PREVIEW_PRODUCTS = [
+  {
+    name: 'AI Sales Agent',
+    category: 'AI Agents',
+    tagline: 'Qualifica lead e devolve o resumo direto no CRM.',
+    rating: '4,9',
+    sales: '312 vendas',
+    price: 'R$ 149',
+  },
+  {
+    name: 'WhatsApp Support Agent',
+    category: 'Chatbots',
+    tagline: 'Primeiro atendimento e encaminhamento sem fila.',
+    rating: '4,8',
+    sales: '268 vendas',
+    price: 'R$ 199',
+  },
+  {
+    name: 'Lead Qualification Flow',
+    category: 'Workflows',
+    tagline: 'Distribui o lead certo para o vendedor certo.',
+    rating: '4,7',
+    sales: '196 vendas',
+    price: 'R$ 89',
+  },
+  {
+    name: 'Contract Review Agent',
+    category: 'AI Agents',
+    tagline: 'Lê o contrato e aponta risco por cláusula.',
+    rating: '5,0',
+    sales: '134 vendas',
+    price: 'R$ 249',
+  },
+  {
+    name: 'Meeting Notes Automation',
+    category: 'Automações',
+    tagline: 'Decisões e tarefas atribuídas ao fim da call.',
+    rating: '4,8',
+    sales: '741 vendas',
+    price: 'Grátis',
+  },
+  {
+    name: 'Ops Report Template',
+    category: 'Templates',
+    tagline: 'Relatório que se preenche sozinho toda segunda.',
+    rating: '4,6',
+    sales: '203 vendas',
+    price: 'R$ 79',
+  },
+] as const;
+
 function BrowserMockup() {
   const categories = [
     'AI Agents',
@@ -251,19 +307,29 @@ function BrowserMockup() {
             </div>
 
             <div className="grid grid-cols-3 gap-[14px]">
-              {Array.from({ length: 6 }).map((_, i) => (
+              {PREVIEW_PRODUCTS.map((item) => (
                 <div
-                  key={i}
+                  key={item.name}
                   className="flex flex-col gap-2 rounded-[12px] border border-line p-[14px]"
                 >
                   <Thumb className="h-[78px] w-full" />
-                  <span className="h-[16px] w-[62px] rounded-[6px] bg-sky" />
-                  <span className="h-[11px] w-[85%] rounded bg-[#E2E8F0]" />
-                  <span className="h-[9px] w-full rounded bg-[#EFF2F6]" />
-                  <span className="h-[9px] w-[55%] rounded bg-[#EFF2F6]" />
+                  <span className="w-fit rounded-[6px] bg-sky px-2 py-[3px] text-[10.5px] font-bold text-blue-700">
+                    {item.category}
+                  </span>
+                  <span className="text-[13px] leading-tight font-extrabold text-ink">
+                    {item.name}
+                  </span>
+                  <span className="text-[11px] leading-[1.45] text-muted">
+                    {item.tagline}
+                  </span>
                   <span className="mt-1 flex items-center justify-between border-t border-line pt-2">
-                    <span className="h-[10px] w-[42px] rounded bg-[#EFF2F6]" />
-                    <span className="h-[13px] w-[46px] rounded bg-[#E2E8F0]" />
+                    <span className="text-[10.5px] text-muted">
+                      <span className="text-star">★</span> {item.rating} ·{' '}
+                      {item.sales}
+                    </span>
+                    <span className="text-[12px] font-extrabold text-ink">
+                      {item.price}
+                    </span>
                   </span>
                 </div>
               ))}

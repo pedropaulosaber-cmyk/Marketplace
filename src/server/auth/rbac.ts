@@ -44,6 +44,11 @@ export const PERMISSIONS = {
   'proposal:respond': ['BUYER', 'CREATOR', 'PROFESSIONAL', 'ADMIN'],
   'professional:manage:own': ['PROFESSIONAL', 'ADMIN'],
 
+  // Running a programme is a seller capability; joining one is open to any
+  // signed-in account, which is the whole point of an affiliate channel.
+  'affiliate:program:manage': ['CREATOR', 'ADMIN'],
+  'affiliate:join': ['BUYER', 'CREATOR', 'PROFESSIONAL', 'ADMIN'],
+
   // Platform
   'admin:access': ['ADMIN'],
   'user:manage': ['ADMIN'],

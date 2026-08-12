@@ -157,7 +157,8 @@ function Hero() {
         </div>
 
         <p className="mt-4 text-[13.5px] text-muted">
-          Compre soluções prontas ou encontre quem pode construí-las para você.
+          Soluções prontas para problemas reais de empresas. Conectamos você
+          com o melhor do mercado de IA do Brasil.
         </p>
       </Container>
 

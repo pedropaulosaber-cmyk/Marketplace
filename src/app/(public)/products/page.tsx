@@ -23,6 +23,8 @@ import { getSession } from '@/server/auth/session';
 import { db } from '@/server/db/client';
 import { productFiltersSchema } from '@/lib/validation/schemas';
 import { resilient } from '@/lib/resilient';
+import { isDatabaseConfigured } from '@/lib/env';
+import { demoProductFilterCounts, filterDemoProducts } from '@/lib/demo-data';
 
 export const metadata: Metadata = {
   title: 'Produtos',
@@ -125,6 +127,20 @@ export default async function ProductsPage({
 }
 
 async function FilterSidebar() {
+  // No database configured: skip the query entirely and reflect the same
+  // fictional catalogue the listing below renders, rather than three counts
+  // that could only ever come back as errors.
+  if (!isDatabaseConfigured) {
+    const counts = demoProductFilterCounts();
+    return (
+      <FilterSidebarView
+        total={counts.total}
+        free={counts.free}
+        verified={counts.verified}
+      />
+    );
+  }
+
   // Counts come straight from the database so the sidebar reflects the real
   // catalog rather than hard-coded numbers. A count that cannot be fetched
   // just renders the filter without a number next to it — degrading a label
@@ -149,6 +165,18 @@ async function FilterSidebar() {
   );
   const [total, free, verified] = counts;
 
+  return <FilterSidebarView total={total} free={free} verified={verified} />;
+}
+
+function FilterSidebarView({
+  total,
+  free,
+  verified,
+}: {
+  total: number | undefined;
+  free: number | undefined;
+  verified: number | undefined;
+}) {
   return (
     <aside
       aria-label="Filtros"
@@ -186,6 +214,33 @@ async function Results({
   const parsed = productFiltersSchema.safeParse(raw);
   const filters = parsed.success ? parsed.data : productFiltersSchema.parse({});
 
+  // No database configured: filter the fictional catalogue in memory instead
+  // of querying, and skip the session/favourites lookups entirely — there is
+  // no real account behind a demo page view.
+  if (!isDatabaseConfigured) {
+    const listing = filterDemoProducts(filters);
+    return (
+      <ResultsView
+        raw={raw}
+        items={listing.items.map((p) => ({
+          id: p.id,
+          slug: p.slug,
+          name: p.name,
+          tagline: p.tagline,
+          priceCents: p.priceCents,
+          ratingSum: p.ratingSum,
+          ratingCount: p.ratingCount,
+          category: { name: p.categoryName },
+          author: { name: p.authorName },
+        }))}
+        total={listing.total}
+        page={listing.page}
+        pageCount={listing.pageCount}
+        favorites={new Set()}
+      />
+    );
+  }
+
   const { data: listing, unavailable } = await resilient(
     () => listProducts(filters),
     { items: [], total: 0, page: 1, pageCount: 1 },
@@ -208,6 +263,43 @@ async function Results({
     );
   }
 
+  return (
+    <ResultsView
+      raw={raw}
+      items={items}
+      total={total}
+      page={page}
+      pageCount={pageCount}
+      favorites={favorites}
+    />
+  );
+}
+
+function ResultsView({
+  raw,
+  items,
+  total,
+  page,
+  pageCount,
+  favorites,
+}: {
+  raw: Record<string, string | string[] | undefined>;
+  items: Array<{
+    id: string;
+    slug: string;
+    name: string;
+    tagline: string;
+    priceCents: number;
+    ratingSum: number;
+    ratingCount: number;
+    category: { name: string };
+    author: { name: string };
+  }>;
+  total: number;
+  page: number;
+  pageCount: number;
+  favorites: Set<string>;
+}) {
   if (items.length === 0) {
     return (
       <div className="mt-8">

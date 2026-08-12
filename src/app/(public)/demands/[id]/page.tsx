@@ -13,6 +13,8 @@ import { getSession } from '@/server/auth/session';
 import { db } from '@/server/db/client';
 import { isAppError } from '@/lib/errors';
 import { formatMoney, formatRange } from '@/lib/money';
+import { isDatabaseConfigured } from '@/lib/env';
+import { findDemoDemand, type DemoDemand } from '@/lib/demo-data';
 import { ProposalForm } from './_components/proposal-form';
 import { ProposalDecision } from './_components/proposal-decision';
 
@@ -24,6 +26,20 @@ export async function generateMetadata({
   params,
 }: PageProps): Promise<Metadata> {
   const { id } = await params;
+
+  // No database configured: metadata comes from the fictional list instead
+  // of a query that could only fail.
+  if (!isDatabaseConfigured) {
+    const demo = findDemoDemand(id);
+    if (!demo) {
+      return { title: 'Demanda não encontrada', robots: { index: false } };
+    }
+    return {
+      title: demo.title,
+      description: demo.problem.slice(0, 160),
+      alternates: { canonical: `/demands/${demo.slug}` },
+    };
+  }
 
   const demand = await db.demand.findFirst({
     where: { OR: [{ id }, { slug: id }], deletedAt: null },
@@ -43,6 +59,15 @@ export async function generateMetadata({
 
 export default async function DemandPage({ params }: PageProps) {
   const { id } = await params;
+
+  // No database configured: render straight from the fictional list,
+  // bypassing session-aware proposal logic entirely — there is no real
+  // account or proposal behind a demo demand.
+  if (!isDatabaseConfigured) {
+    const demo = findDemoDemand(id);
+    if (!demo) notFound();
+    return <DemoDemandPage demand={demo} />;
+  }
 
   let data: Awaited<ReturnType<typeof getDemand>>;
   try {
@@ -304,5 +329,119 @@ function Section({
         {children}
       </p>
     </section>
+  );
+}
+
+/**
+ * Renders one fictional demand without touching the database or the
+ * session. Proposals are session- and ownership-gated in the real page in
+ * ways that need a database to resolve, so the demo version shows the
+ * demand itself and a static "nenhuma proposta ainda" state rather than
+ * faking a proposal thread.
+ */
+function DemoDemandPage({ demand }: { demand: DemoDemand }) {
+  return (
+    <Container className="py-12 max-sm:py-6">
+      <nav aria-label="Trilha de navegação">
+        <ol className="flex items-center gap-2 text-[13px] text-muted">
+          <li>
+            <Link href="/demands" className="no-underline hover:text-blue-700">
+              Demandas
+            </Link>
+          </li>
+          <li aria-hidden="true">/</li>
+          <li aria-current="page" className="font-medium text-ink">
+            {demand.title}
+          </li>
+        </ol>
+      </nav>
+
+      <div className="mt-6 grid grid-cols-[1fr_320px] gap-12 max-lg:grid-cols-1 max-lg:gap-8">
+        <div>
+          <div className="flex flex-wrap items-center gap-3">
+            <Tag>{demand.category}</Tag>
+            <StatusTag status={demand.status} />
+          </div>
+
+          <h1 className="mt-4 text-[36px] leading-[1.1] font-extrabold max-sm:text-[26px]">
+            {demand.title}
+          </h1>
+
+          <div className="mt-5 flex items-center gap-3">
+            <Avatar name={demand.buyerName} size={38} />
+            <div>
+              <p className="text-[14px] font-bold">
+                {demand.buyerCompany ?? demand.buyerName}
+              </p>
+              <p className="text-[12.5px] text-muted">
+                Publicada por {demand.buyerName}
+              </p>
+            </div>
+          </div>
+
+          <Section title="O problema">{demand.problem}</Section>
+          <Section title="O objetivo">{demand.goal}</Section>
+          <Section title="Contexto e detalhes">{demand.details}</Section>
+
+          {demand.tools.length > 0 ? (
+            <section className="mt-9">
+              <h2 className="text-[20px] font-extrabold">Ferramentas</h2>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {demand.tools.map((tool) => (
+                  <Tag key={tool} tone="neutral">
+                    {tool}
+                  </Tag>
+                ))}
+              </div>
+            </section>
+          ) : null}
+
+          <section className="mt-12">
+            <h2 className="text-[24px] font-extrabold">
+              {demand.proposalCount}{' '}
+              {demand.proposalCount === 1 ? 'proposta recebida' : 'propostas recebidas'}
+            </h2>
+            <p className="mt-2 text-[13.5px] text-muted">
+              Propostas ficam visíveis apenas para quem publicou a demanda.
+            </p>
+          </section>
+        </div>
+
+        {/* --- Summary panel --- */}
+        <aside className="max-lg:order-first">
+          <div className="sticky top-[100px] rounded-[14px] border border-line bg-white p-6">
+            <dl className="flex flex-col gap-4 text-[13.5px]">
+              <div>
+                <dt className="text-muted">Orçamento</dt>
+                <dd className="mt-1 text-[19px] font-extrabold">
+                  {formatRange(demand.budgetMinCents, demand.budgetMaxCents)}
+                </dd>
+              </div>
+              <div className="border-t border-line pt-4">
+                <dt className="text-muted">Prazo desejado</dt>
+                <dd className="mt-1 font-bold">{demand.deadlineWeeks} semanas</dd>
+              </div>
+              <div className="border-t border-line pt-4">
+                <dt className="text-muted">Propostas recebidas</dt>
+                <dd className="mt-1 font-bold">{demand.proposalCount}</dd>
+              </div>
+              <div className="border-t border-line pt-4">
+                <dt className="text-muted">Publicada em</dt>
+                <dd className="mt-1 font-bold">
+                  {demand.createdAt.toLocaleDateString('pt-BR')}
+                </dd>
+              </div>
+            </dl>
+
+            <p className="mt-6 border-t border-line pt-5 text-[13px] leading-[1.5] text-muted">
+              <Link href="/login" className="font-semibold">
+                Entre
+              </Link>{' '}
+              como profissional para enviar uma proposta.
+            </p>
+          </div>
+        </aside>
+      </div>
+    </Container>
   );
 }

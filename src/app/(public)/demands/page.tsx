@@ -15,6 +15,8 @@ import { Pagination } from '@/components/marketplace/pagination';
 import { listOpenDemands } from '@/server/services/demand-service';
 import { formatRange } from '@/lib/money';
 import { resilient } from '@/lib/resilient';
+import { isDatabaseConfigured } from '@/lib/env';
+import { filterDemoDemands } from '@/lib/demo-data';
 
 export const metadata: Metadata = {
   title: 'Demandas',
@@ -82,6 +84,21 @@ async function DemandList({
 
   const category = typeof raw.category === 'string' ? raw.category : undefined;
 
+  // No database configured: filter the fictional demand list in memory
+  // instead of querying.
+  if (!isDatabaseConfigured) {
+    const listing = filterDemoDemands(page, category);
+    return (
+      <DemandListView
+        items={listing.items}
+        total={listing.total}
+        page={listing.page}
+        pageCount={listing.pageCount}
+        category={category}
+      />
+    );
+  }
+
   const { data: listing, unavailable } = await resilient(
     () => listOpenDemands(page, category),
     { items: [], total: 0, page: 1, pageCount: 1 },
@@ -97,6 +114,43 @@ async function DemandList({
     );
   }
 
+  return (
+    <DemandListView
+      items={items}
+      total={total}
+      page={page}
+      pageCount={pageCount}
+      category={category}
+    />
+  );
+}
+
+function DemandListView({
+  items,
+  total,
+  page,
+  pageCount,
+  category,
+}: {
+  items: Array<{
+    id: string;
+    slug: string;
+    title: string;
+    category: string;
+    problem: string;
+    tools: string[];
+    budgetMinCents: number;
+    budgetMaxCents: number;
+    deadlineWeeks: number;
+    status: string;
+    proposalCount: number;
+    createdAt: Date;
+  }>;
+  total: number;
+  page: number;
+  pageCount: number;
+  category: string | undefined;
+}) {
   if (items.length === 0) {
     return (
       <div className="mt-10">

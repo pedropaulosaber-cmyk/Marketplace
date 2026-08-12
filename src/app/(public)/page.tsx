@@ -16,6 +16,8 @@ import { getFeaturedProfessionals } from '@/server/services/professional-service
 import { SolutionMarquee } from './_components/solution-marquee';
 import { formatRange } from '@/lib/money';
 import { resilient } from '@/lib/resilient';
+import { isDatabaseConfigured } from '@/lib/env';
+import { DEMO_PRODUCTS, DEMO_PROFESSIONALS } from '@/lib/demo-data';
 
 export const metadata: Metadata = {
   title: 'AUTOMATIZE — Marketplace de soluções de IA',
@@ -378,7 +380,44 @@ function Paths() {
   );
 }
 
+/** Demo catalogue reshaped to what `<ProductCard>` needs. */
+function demoProductCards() {
+  return DEMO_PRODUCTS.slice(0, 8).map((p) => ({
+    id: p.id,
+    slug: p.slug,
+    name: p.name,
+    tagline: p.tagline,
+    priceCents: p.priceCents,
+    ratingSum: p.ratingSum,
+    ratingCount: p.ratingCount,
+    category: { name: p.categoryName },
+    author: { name: p.authorName },
+  }));
+}
+
 async function FeaturedProducts() {
+  // No database configured at all: skip the query entirely rather than
+  // attempting a connection that can only fail, and show the same fictional
+  // catalogue the seed script would otherwise load into a real database.
+  if (!isDatabaseConfigured) {
+    return (
+      <>
+        <ul className="mt-10 grid grid-cols-4 gap-[14px] max-lg:grid-cols-2 max-sm:grid-cols-1">
+          {demoProductCards().map((product) => (
+            <li key={product.id} className="contents">
+              <ProductCard product={product} showFavorite={false} />
+            </li>
+          ))}
+        </ul>
+        <div className="mt-8 text-center">
+          <LinkButton href="/products" variant="secondary">
+            Ver todos os produtos
+          </LinkButton>
+        </div>
+      </>
+    );
+  }
+
   const { data: products, unavailable } = await resilient(
     () => getFeaturedProducts(8),
     [],
@@ -419,7 +458,28 @@ async function FeaturedProducts() {
   );
 }
 
+/** Demo roster reshaped to what the featured-professional card needs. */
+function demoFeaturedProfessionals() {
+  return DEMO_PROFESSIONALS.filter((p) => p.verified)
+    .slice(0, 3)
+    .map((p) => ({
+      id: p.id,
+      slug: p.slug,
+      verified: p.verified,
+      title: p.title,
+      bio: p.bio,
+      skills: p.skills,
+      rateMinCents: p.rateMinCents,
+      rateMaxCents: p.rateMaxCents,
+      user: { name: p.name },
+    }));
+}
+
 async function FeaturedProfessionals() {
+  if (!isDatabaseConfigured) {
+    return <FeaturedProfessionalsList pros={demoFeaturedProfessionals()} />;
+  }
+
   const { data: pros, unavailable } = await resilient(
     () => getFeaturedProfessionals(3),
     [],
@@ -434,6 +494,24 @@ async function FeaturedProfessionals() {
     );
   }
 
+  return <FeaturedProfessionalsList pros={pros} />;
+}
+
+function FeaturedProfessionalsList({
+  pros,
+}: {
+  pros: Array<{
+    id: string;
+    slug: string;
+    verified: boolean;
+    title: string;
+    bio: string;
+    skills: string[];
+    rateMinCents: number;
+    rateMaxCents: number;
+    user: { name: string };
+  }>;
+}) {
   if (pros.length === 0) {
     return (
       <p className="mt-10 rounded-[14px] border border-dashed border-line bg-bg px-6 py-12 text-center text-[14.5px] text-muted">

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/server/db/client';
-import { isPaymentsConfigured } from '@/lib/env';
+import { isDatabaseConfigured, isPaymentsConfigured } from '@/lib/env';
 import { isStorageConfigured } from '@/server/storage';
 
 export const runtime = 'nodejs';
@@ -29,6 +29,11 @@ export async function GET(): Promise<NextResponse> {
     uptimeSeconds: Math.round(process.uptime()),
     checks: {
       database,
+      // Distinguishes "nobody set DATABASE_URL yet" (expected during a first
+      // deploy) from "it's set but unreachable" (an actual incident) —
+      // database is reachable false in both cases, but only one of them is
+      // a surprise.
+      databaseConfigured: isDatabaseConfigured,
       payments: isPaymentsConfigured,
       storage: isStorageConfigured,
     },

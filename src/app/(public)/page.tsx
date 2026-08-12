@@ -15,6 +15,7 @@ import { getFeaturedProducts } from '@/server/services/product-service';
 import { getFeaturedProfessionals } from '@/server/services/professional-service';
 import { SolutionMarquee } from './_components/solution-marquee';
 import { formatRange } from '@/lib/money';
+import { resilient } from '@/lib/resilient';
 
 export const metadata: Metadata = {
   title: 'AUTOMATIZE — Marketplace de soluções de IA',
@@ -24,9 +25,13 @@ export const metadata: Metadata = {
   alternates: { canonical: '/' },
 };
 
-// The landing page is largely static; revalidate hourly so featured products
-// stay fresh without rendering per request.
-export const revalidate = 3600;
+// Forced dynamic rather than ISR (`revalidate`): the shared layout already
+// reads the session cookie on every request, which makes this route dynamic
+// in practice. Being explicit here also means Next never attempts to
+// pre-render this page at *build* time — which matters because the featured
+// sections query the database, and a build must succeed even before a real
+// DATABASE_URL is configured (see src/lib/env.ts).
+export const dynamic = 'force-dynamic';
 
 const PATHS = [
   {
@@ -307,7 +312,19 @@ function Paths() {
 }
 
 async function FeaturedProducts() {
-  const products = await getFeaturedProducts(8);
+  const { data: products, unavailable } = await resilient(
+    () => getFeaturedProducts(8),
+    [],
+    'home.featuredProducts'
+  );
+
+  if (unavailable) {
+    return (
+      <p className="mt-10 rounded-[14px] border border-dashed border-line bg-bg px-6 py-12 text-center text-[14.5px] text-muted">
+        Não foi possível carregar os produtos em destaque agora.
+      </p>
+    );
+  }
 
   if (products.length === 0) {
     return (
@@ -336,7 +353,19 @@ async function FeaturedProducts() {
 }
 
 async function FeaturedProfessionals() {
-  const pros = await getFeaturedProfessionals(3);
+  const { data: pros, unavailable } = await resilient(
+    () => getFeaturedProfessionals(3),
+    [],
+    'home.featuredProfessionals'
+  );
+
+  if (unavailable) {
+    return (
+      <p className="mt-10 rounded-[14px] border border-dashed border-line bg-bg px-6 py-12 text-center text-[14.5px] text-muted">
+        Não foi possível carregar os profissionais em destaque agora.
+      </p>
+    );
+  }
 
   if (pros.length === 0) {
     return (

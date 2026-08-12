@@ -63,16 +63,29 @@ export async function generateMetadata({
   };
 }
 
-/** Pre-render the best-selling products at build time. */
+/**
+ * Pre-render the best-selling products at build time.
+ *
+ * Runs during `next build`, unlike the page itself (pushed to on-demand
+ * rendering by the session cookie read in the shared layout). If the
+ * database is not reachable yet, prerender nothing rather than fail the
+ * build — `dynamicParams` defaults to true, so every product still renders
+ * correctly on its first real request, just without the build-time head
+ * start. The next build picks the static list back up automatically.
+ */
 export async function generateStaticParams() {
-  const products = await db.product.findMany({
-    where: { status: 'PUBLISHED', deletedAt: null },
-    select: { slug: true },
-    orderBy: { salesCount: 'desc' },
-    take: 50,
-  });
+  try {
+    const products = await db.product.findMany({
+      where: { status: 'PUBLISHED', deletedAt: null },
+      select: { slug: true },
+      orderBy: { salesCount: 'desc' },
+      take: 50,
+    });
 
-  return products.map((p) => ({ slug: p.slug }));
+    return products.map((p) => ({ slug: p.slug }));
+  } catch {
+    return [];
+  }
 }
 
 export const revalidate = 600;

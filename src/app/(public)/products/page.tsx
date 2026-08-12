@@ -5,6 +5,7 @@ import {
   CardSkeleton,
   Container,
   EmptyState,
+  ErrorState,
   SectionHeading,
 } from '@/components/ui/primitives';
 import { ProductCard } from '@/components/marketplace/product-card';
@@ -21,6 +22,7 @@ import { getFavoriteProductIds } from '@/server/services/engagement-service';
 import { getSession } from '@/server/auth/session';
 import { db } from '@/server/db/client';
 import { productFiltersSchema } from '@/lib/validation/schemas';
+import { resilient } from '@/lib/resilient';
 
 export const metadata: Metadata = {
   title: 'Produtos',
@@ -124,20 +126,28 @@ export default async function ProductsPage({
 
 async function FilterSidebar() {
   // Counts come straight from the database so the sidebar reflects the real
-  // catalog rather than hard-coded numbers.
-  const [total, free, verified] = await Promise.all([
-    db.product.count({ where: { status: 'PUBLISHED', deletedAt: null } }),
-    db.product.count({
-      where: { status: 'PUBLISHED', deletedAt: null, priceCents: 0 },
-    }),
-    db.product.count({
-      where: {
-        status: 'PUBLISHED',
-        deletedAt: null,
-        author: { professional: { verified: true } },
-      },
-    }),
-  ]);
+  // catalog rather than hard-coded numbers. A count that cannot be fetched
+  // just renders the filter without a number next to it — degrading a label
+  // is better than losing the whole sidebar over three optional counts.
+  const { data: counts } = await resilient(
+    () =>
+      Promise.all([
+        db.product.count({ where: { status: 'PUBLISHED', deletedAt: null } }),
+        db.product.count({
+          where: { status: 'PUBLISHED', deletedAt: null, priceCents: 0 },
+        }),
+        db.product.count({
+          where: {
+            status: 'PUBLISHED',
+            deletedAt: null,
+            author: { professional: { verified: true } },
+          },
+        }),
+      ]),
+    [undefined, undefined, undefined] as Array<number | undefined>,
+    'products.filterCounts'
+  );
+  const [total, free, verified] = counts;
 
   return (
     <aside
@@ -176,14 +186,27 @@ async function Results({
   const parsed = productFiltersSchema.safeParse(raw);
   const filters = parsed.success ? parsed.data : productFiltersSchema.parse({});
 
-  const [{ items, total, page, pageCount }, session] = await Promise.all([
-    listProducts(filters),
-    getSession(),
-  ]);
+  const { data: listing, unavailable } = await resilient(
+    () => listProducts(filters),
+    { items: [], total: 0, page: 1, pageCount: 1 },
+    'products.listing'
+  );
+  const { items, total, page, pageCount } = listing;
 
-  const favorites = session
-    ? await getFavoriteProductIds(session.id)
-    : new Set<string>();
+  const session = await getSession();
+  const { data: favorites } = await resilient(
+    () => (session ? getFavoriteProductIds(session.id) : Promise.resolve(new Set<string>())),
+    new Set<string>(),
+    'products.favorites'
+  );
+
+  if (unavailable) {
+    return (
+      <div className="mt-8">
+        <ErrorState description="Não conseguimos carregar o catálogo agora. Tente novamente em instantes." />
+      </div>
+    );
+  }
 
   if (items.length === 0) {
     return (

@@ -4,6 +4,7 @@ import { cache } from 'react';
 import { db } from '@/server/db/client';
 import { isProduction } from '@/lib/env';
 import { fingerprint, generateToken, hashIp } from '@/server/security/crypto';
+import { securityLog } from '@/lib/logger';
 import type { Role, UserStatus } from '@prisma/client';
 
 /**
@@ -92,25 +93,39 @@ export const getSession = cache(async (): Promise<SessionUser | null> => {
   const token = jar.get(cookieName())?.value;
   if (!token) return null;
 
-  const session = await db.session.findUnique({
-    where: { tokenHash: fingerprint(token) },
-    select: {
-      id: true,
-      expiresAt: true,
-      revokedAt: true,
-      lastActivityAt: true,
-      user: {
-        select: {
-          id: true,
-          email: true,
-          name: true,
-          status: true,
-          deletedAt: true,
-          roles: { select: { role: true } },
+  let session;
+  try {
+    session = await db.session.findUnique({
+      where: { tokenHash: fingerprint(token) },
+      select: {
+        id: true,
+        expiresAt: true,
+        revokedAt: true,
+        lastActivityAt: true,
+        user: {
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            status: true,
+            deletedAt: true,
+            roles: { select: { role: true } },
+          },
         },
       },
-    },
-  });
+    });
+  } catch (error) {
+    // getSession() is called from nearly every layout, on every request —
+    // a database outage must not turn every single page into a crash just
+    // because we couldn't verify who's asking. Fail into "not signed in"
+    // (the safe direction: worst case a valid visitor is asked to log in
+    // again) rather than letting this throw take the whole page down.
+    securityLog.error(
+      { err: error },
+      'session lookup failed; treating request as unauthenticated'
+    );
+    return null;
+  }
 
   if (!session) return null;
   if (session.revokedAt) return null;

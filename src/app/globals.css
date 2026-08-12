@@ -1,0 +1,206 @@
+@import 'tailwindcss';
+
+/* ---------------------------------------------------------------------------
+ * AUTOMATIZE design system
+ *
+ * Tokens are transcribed verbatim from the Canvas design (desktop 1440px and
+ * mobile 390px artifacts share one palette). Do not invent new colors here —
+ * add a token and use it, so the product stays one coherent surface.
+ * ------------------------------------------------------------------------- */
+
+@theme {
+  /* Brand */
+  --color-blue: #2563eb;
+  --color-blue-700: #1d4ed8;
+  --color-blue-900: #0b1f3a;
+  --color-sky: #eff6ff;
+
+  /* Surfaces */
+  --color-paper: #ffffff;
+  --color-bg: #f8fafc;
+
+  /* Text + lines */
+  --color-ink: #0f172a;
+  --color-muted: #64748b;
+  --color-line: #e2e8f0;
+
+  /* Semantic state colors (from the tag variants in the design) */
+  --color-ok-bg: #ecfdf5;
+  --color-ok-fg: #047857;
+  --color-warn-bg: #fef3c7;
+  --color-warn-fg: #92400e;
+  --color-neutral-bg: #f1f5f9;
+  --color-neutral-fg: #475569;
+  --color-danger-bg: #fef2f2;
+  --color-danger-fg: #b91c1c;
+  --color-star: #f59e0b;
+
+  --font-sans:
+    'Manrope', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI',
+    sans-serif;
+
+  /* Desktop radii; mobile overrides live on the components themselves. */
+  --radius-btn: 8px;
+  --radius-card: 14px;
+  --radius-thumb: 10px;
+  --radius-tag: 6px;
+
+  --shadow-card-hover: 0 12px 28px rgb(15 23 42 / 0.1);
+  --shadow-primary: 0 6px 18px rgb(37 99 235 / 0.28);
+}
+
+/* --- Base ---------------------------------------------------------------- */
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    margin: 0;
+    background: var(--color-paper);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: var(--font-sans);
+    letter-spacing: -0.03em;
+    margin: 0;
+    text-wrap: balance;
+  }
+
+  p {
+    margin: 0;
+  }
+
+  a {
+    color: var(--color-blue-700);
+  }
+
+  a:hover {
+    color: var(--color-blue-900);
+  }
+
+  /* A single, consistent focus ring across every interactive element. */
+  :focus-visible {
+    outline: 2px solid var(--color-blue);
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+
+  /* Respect the user's motion preference everywhere. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+/* --- Utilities ----------------------------------------------------------- */
+
+@utility eyebrow {
+  font-size: 12.5px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--color-blue);
+  font-weight: 700;
+}
+
+/* The gradient placeholder used wherever a product image has not loaded. */
+@utility thumb {
+  background: linear-gradient(
+    140deg,
+    #eff6ff 0%,
+    #dbeafe 55%,
+    #e0e7ff 100%
+  );
+  border: 1px solid var(--color-line);
+}
+
+/* Entry animation used on route content in the design. */
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@utility rise {
+  animation: rise 0.4s cubic-bezier(0.2, 0.7, 0.3, 1) both;
+}
+
+/* Horizontal marquee of solution types on the landing page. */
+@keyframes marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+@utility marquee-track {
+  display: flex;
+  width: max-content;
+  animation: marquee 34s linear infinite;
+}
+
+@utility skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--color-neutral-bg) 25%,
+    #e8edf3 37%,
+    var(--color-neutral-bg) 63%
+  );
+  background-size: 400% 100%;
+  animation: skeleton-sweep 1.4s ease infinite;
+}
+
+@keyframes skeleton-sweep {
+  from {
+    background-position: 100% 50%;
+  }
+  to {
+    background-position: 0 50%;
+  }
+}
+
+/* Hides a horizontal scroller's scrollbar (mobile chip rows). */
+@utility no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* Accessible skip link: visible only when focused. */
+@utility skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  z-index: 100;
+  &:focus {
+    left: 8px;
+    top: 8px;
+    padding: 10px 16px;
+    background: var(--color-paper);
+    border: 1px solid var(--color-blue);
+    border-radius: var(--radius-btn);
+    font-weight: 700;
+  }
+}

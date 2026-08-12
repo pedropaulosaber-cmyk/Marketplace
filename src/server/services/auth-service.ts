@@ -4,6 +4,10 @@ import { hashPassword, verifyPassword, burnTiming } from '@/server/auth/password
 import { createSession, revokeAllSessions } from '@/server/auth/session';
 import { enforceRateLimit } from '@/server/security/rate-limit';
 import { audit } from '@/server/security/audit';
+import {
+  issueChallenge,
+  requiresSecondFactor,
+} from '@/server/services/two-factor-service';
 import { conflict, validation } from '@/lib/errors';
 import { securityLog } from '@/lib/logger';
 import { slugify } from '@/lib/validation/common';
@@ -110,7 +114,7 @@ export async function register(
 
 export async function login(
   input: z.infer<typeof loginSchema>
-): Promise<{ userId: string }> {
+): Promise<{ userId: string; requiresTwoFactor: boolean }> {
   // Limit by IP first: this runs before we know which account is targeted, so
   // it is what actually blunts credential stuffing across many accounts.
   await enforceRateLimit('login');
@@ -196,6 +200,22 @@ export async function login(
     });
   }
 
+  // With a second factor configured the password alone earns a challenge, not
+  // a session. Nothing authenticated exists until the factor is proven, so a
+  // stolen password gets an attacker to a code prompt and no further.
+  if (await requiresSecondFactor(user.id)) {
+    await issueChallenge(user.id);
+
+    await audit({
+      actorId: user.id,
+      action: 'user.two_factor_challenged',
+      entityType: 'User',
+      entityId: user.id,
+    });
+
+    return { userId: user.id, requiresTwoFactor: true };
+  }
+
   await createSession(user.id);
 
   await audit({
@@ -205,7 +225,7 @@ export async function login(
     entityId: user.id,
   });
 
-  return { userId: user.id };
+  return { userId: user.id, requiresTwoFactor: false };
 }
 
 export async function changePassword(

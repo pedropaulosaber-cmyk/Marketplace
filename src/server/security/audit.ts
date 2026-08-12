@@ -27,6 +27,10 @@ export type AuditAction =
   | 'user.role_revoked'
   | 'user.suspended'
   | 'user.reinstated'
+  | 'user.two_factor_enabled'
+  | 'user.two_factor_disabled'
+  | 'user.two_factor_challenged'
+  | 'user.session_revoked'
   // catalog
   | 'product.created'
   | 'product.updated'

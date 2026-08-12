@@ -349,3 +349,23 @@ export const affiliateDecisionSchema = z.object({
   affiliateId: cuid,
   status: z.enum(['APPROVED', 'REJECTED', 'BLOCKED']),
 });
+
+// --- Two-factor authentication ----------------------------------------------
+
+/**
+ * Accepts a 6-digit TOTP code or a 10-character recovery code, so one field
+ * on the challenge screen handles both. Whitespace is stripped because
+ * authenticator apps display codes in groups.
+ */
+export const twoFactorCodeSchema = z.object({
+  code: z
+    .string()
+    .trim()
+    .min(6, 'Informe o código.')
+    .max(20, 'Código inválido.')
+    .transform((value) => value.replace(/[\s-]/g, '')),
+});
+
+export const disableTwoFactorSchema = z.object({
+  password: z.string().min(1, 'Informe sua senha.').max(200),
+});

@@ -50,6 +50,14 @@ model User {
   failedLoginCount Int       @default(0)
   lockedUntil      DateTime?
 
+  /// TOTP shared secret, AES-256-GCM encrypted at rest. Unlike a password
+  /// this has to be recoverable — the server reproduces it on every
+  /// verification — so a database leak alone must not yield a working secret.
+  totpSecret    String?
+  /// Null until an enrolment is confirmed with a valid code. A secret that
+  /// was generated but never proven is not a second factor.
+  totpEnabledAt DateTime?
+
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
@@ -75,6 +83,9 @@ model User {
 
   affiliatePrograms AffiliateProgram[]
   affiliations      Affiliate[]
+
+  recoveryCodes       RecoveryCode[]
+  twoFactorChallenges TwoFactorChallenge[]
 
   @@index([status])
   @@index([createdAt])
@@ -928,6 +939,53 @@ model Notification {
 
   @@index([userId, readAt, createdAt(sort: Desc)])
   @@map("notifications")
+}
+
+/// Single-use codes for when the authenticator device is lost.
+///
+/// Stored as HMAC fingerprints rather than Argon2 hashes: these are
+/// high-entropy random values, not user-chosen passwords, so there is no
+/// dictionary to slow an attacker down through and nothing to gain from a
+/// deliberately expensive hash. Same reasoning as session tokens.
+model RecoveryCode {
+  id     String @id @default(cuid())
+  userId String
+
+  codeHash String @unique
+
+  createdAt DateTime  @default(now())
+  usedAt    DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, usedAt])
+  @@map("recovery_codes")
+}
+
+/// Proof that a password was verified, pending the second factor.
+///
+/// A row rather than a signed token so it can be revoked and, more
+/// importantly, consumed exactly once — a replayable challenge would let a
+/// captured value be reused to mint sessions.
+model TwoFactorChallenge {
+  id     String @id @default(cuid())
+  userId String
+
+  tokenHash String @unique
+  expiresAt DateTime
+
+  /// Counts wrong codes against this challenge, so a stolen challenge cannot
+  /// be used to brute-force six digits.
+  attempts Int @default(0)
+
+  createdAt  DateTime  @default(now())
+  consumedAt DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("two_factor_challenges")
 }
 
 /// Shared rate-limit counters.

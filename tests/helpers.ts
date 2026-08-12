@@ -48,7 +48,7 @@ export async function resetDatabase(): Promise<void> {
   `);
 
   testCookies.clear();
-  __resetRateLimits();
+  await __resetRateLimits();
 }
 
 export async function createUser(options?: {

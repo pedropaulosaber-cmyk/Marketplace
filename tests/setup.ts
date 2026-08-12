@@ -23,6 +23,12 @@ Object.assign(process.env, {
   DATABASE_URL:
     process.env.DATABASE_URL ??
     'postgresql://automatize:automatize@localhost:5432/automatize_test?schema=public',
+  // Exercise the driver production actually runs. Set explicitly because
+  // Prisma loads `.env` on import, and a developer's local `.env` selecting
+  // the in-memory driver would otherwise silently decide what these tests
+  // cover — the shared-counter behaviour would go untested on exactly the
+  // machines most likely to change it.
+  RATE_LIMIT_DRIVER: process.env.RATE_LIMIT_DRIVER ?? 'database',
 });
 
 /** Mutable cookie jar, reset between tests by the auth helpers. */

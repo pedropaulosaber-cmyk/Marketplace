@@ -930,6 +930,22 @@ model Notification {
   @@map("notifications")
 }
 
+/// Shared rate-limit counters.
+///
+/// Lives in the database rather than in process memory because the app runs
+/// on serverless, where an in-process counter resets on every cold start and
+/// is not shared between concurrent instances — a limiter that appears to
+/// work while enforcing almost nothing.
+model RateLimitCounter {
+  /// "<limit name>:<identity>", identity being a user id or hashed IP.
+  key     String   @id
+  count   Int      @default(0)
+  resetAt DateTime
+
+  @@index([resetAt])
+  @@map("rate_limit_counters")
+}
+
 /// Append-only record of privileged and state-changing actions. Never updated
 /// or deleted by application code.
 model AuditLog {

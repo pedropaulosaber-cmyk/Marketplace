@@ -73,7 +73,12 @@ const envSchema = z
       .default(300),
 
     // --- Rate limiting ----------------------------------------------------
-    RATE_LIMIT_DRIVER: z.enum(['memory', 'redis']).default('memory'),
+    // `database` is the right default anywhere the process is not long-lived.
+    // On serverless each request can land on a fresh instance, so an
+    // in-process counter resets constantly and an attacker gets an unlimited
+    // number of "first attempts" — the limiter looks present and enforces
+    // almost nothing.
+    RATE_LIMIT_DRIVER: z.enum(['memory', 'database', 'redis']).default('database'),
     REDIS_URL: z.string().optional(),
 
     LOG_LEVEL: z

@@ -6,6 +6,7 @@ import {
   CardSkeleton,
   Container,
   EmptyState,
+  ErrorState,
   SectionHeading,
   StatusTag,
   Tag,
@@ -13,6 +14,7 @@ import {
 import { Pagination } from '@/components/marketplace/pagination';
 import { listOpenDemands } from '@/server/services/demand-service';
 import { formatRange } from '@/lib/money';
+import { resilient } from '@/lib/resilient';
 
 export const metadata: Metadata = {
   title: 'Demandas',
@@ -80,7 +82,20 @@ async function DemandList({
 
   const category = typeof raw.category === 'string' ? raw.category : undefined;
 
-  const { items, total, pageCount } = await listOpenDemands(page, category);
+  const { data: listing, unavailable } = await resilient(
+    () => listOpenDemands(page, category),
+    { items: [], total: 0, page: 1, pageCount: 1 },
+    'demands.listing'
+  );
+  const { items, total, pageCount } = listing;
+
+  if (unavailable) {
+    return (
+      <div className="mt-10">
+        <ErrorState description="Não conseguimos carregar as demandas agora. Tente novamente em instantes." />
+      </div>
+    );
+  }
 
   if (items.length === 0) {
     return (

@@ -1,4 +1,5 @@
 import 'server-only';
+import { randomBytes } from 'node:crypto';
 import { z } from 'zod';
 
 /**
@@ -7,6 +8,16 @@ import { z } from 'zod';
  * Parsed once, at module load. An invalid configuration throws immediately so
  * a misconfigured deploy fails at boot instead of leaking a half-working app
  * (e.g. a checkout that silently runs without a webhook secret).
+ *
+ * DATABASE_URL and SESSION_SECRET are the one exception: they fall back to a
+ * safe placeholder instead of refusing to boot. This exists so the app can be
+ * deployed and reachable at a public URL *before* a real database is wired
+ * up — every database-backed request will then fail gracefully through the
+ * app's normal error handling (the action wrapper's catch-all, or the route
+ * error boundary) rather than the whole process refusing to start. Once a
+ * real DATABASE_URL is set, this fallback never engages and the app behaves
+ * exactly as before. `isDatabaseConfigured` / `isSessionConfigured` tell
+ * callers (health check, logs) which mode is active.
  *
  * This module is `server-only`: importing it from a Client Component is a
  * build error, which keeps secrets out of the browser bundle by construction.
@@ -28,15 +39,18 @@ const envSchema = z
 
     APP_URL: urlNoTrailingSlash.default('http://localhost:3000'),
 
-    DATABASE_URL: nonEmpty('DATABASE_URL').startsWith(
-      'postgres',
-      'DATABASE_URL must be a PostgreSQL connection string'
-    ),
+    // Both fall back to a placeholder in loadEnv() below when unset, so they
+    // are optional here — the schema still enforces their *shape* whenever a
+    // real value (or the fallback) is present.
+    DATABASE_URL: nonEmpty('DATABASE_URL')
+      .startsWith('postgres', 'DATABASE_URL must be a PostgreSQL connection string')
+      .optional(),
 
     // 32 bytes of entropy minimum. Used only to fingerprint session tokens.
     SESSION_SECRET: z
       .string()
-      .min(32, 'SESSION_SECRET must be at least 32 characters'),
+      .min(32, 'SESSION_SECRET must be at least 32 characters')
+      .optional(),
 
     // --- Payments ---------------------------------------------------------
     STRIPE_SECRET_KEY: z.string().optional(),
@@ -95,8 +109,11 @@ const envSchema = z
     }
 
     // A production deploy must not run with a placeholder session secret.
+    // `?? false`: the field is optional in the schema (it falls back to a
+    // generated value before parsing, in loadEnv() below), but the type
+    // checker only sees the schema, not that runtime guarantee.
     if (cfg.NODE_ENV === 'production') {
-      if (cfg.SESSION_SECRET.includes('change-me')) {
+      if (cfg.SESSION_SECRET?.includes('change-me') ?? false) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           path: ['SESSION_SECRET'],
@@ -122,10 +139,45 @@ const envSchema = z
     }
   });
 
-export type Env = z.infer<typeof envSchema>;
+/**
+ * DATABASE_URL and SESSION_SECRET are guaranteed non-empty strings on the
+ * exported `env` object — `loadEnv()` fills them in when absent — even though
+ * the schema itself marks them optional (that's what lets a deploy boot
+ * without them). Every other consumer in the app can keep treating them as
+ * plain required strings.
+ */
+export type Env = Omit<
+  z.infer<typeof envSchema>,
+  'DATABASE_URL' | 'SESSION_SECRET'
+> & {
+  DATABASE_URL: string;
+  SESSION_SECRET: string;
+};
+
+/**
+ * Obviously-fake connection string: syntactically valid enough to satisfy
+ * the schema and to let `PrismaClient` construct (which never connects
+ * eagerly), but any real query against it fails fast and loudly rather than
+ * silently pointing at a real database by accident.
+ */
+const PLACEHOLDER_DATABASE_URL =
+  'postgresql://unconfigured:unconfigured@database-not-configured.invalid:5432/unconfigured';
 
 function loadEnv(): Env {
-  const parsed = envSchema.safeParse(process.env);
+  const usingPlaceholderDatabase = !process.env.DATABASE_URL;
+  const usingGeneratedSecret = !process.env.SESSION_SECRET;
+
+  // Inject fallbacks into a *copy* of process.env before validation, so the
+  // rest of the schema (including the superRefine checks below) always sees
+  // a complete, well-shaped configuration — real value or fallback.
+  const candidate: NodeJS.ProcessEnv = {
+    ...process.env,
+    DATABASE_URL: process.env.DATABASE_URL || PLACEHOLDER_DATABASE_URL,
+    SESSION_SECRET:
+      process.env.SESSION_SECRET || randomBytes(48).toString('base64'),
+  };
+
+  const parsed = envSchema.safeParse(candidate);
 
   if (!parsed.success) {
     const details = parsed.error.issues
@@ -137,10 +189,37 @@ function loadEnv(): Env {
     );
   }
 
-  return parsed.data;
+  if (usingPlaceholderDatabase) {
+    // `logger` imports this module, so it cannot be used here without a
+    // cycle — this is the one place in the app that talks to stderr directly.
+    console.warn(
+      '[env] DATABASE_URL is not set. Booting without a database: every ' +
+        'database-backed request (auth, catalog, checkout, everything else ' +
+        'that reads or writes data) will fail until a real DATABASE_URL is ' +
+        'configured. The app stays up and shows its normal error state for ' +
+        'those requests rather than crashing.'
+    );
+  }
+
+  if (usingGeneratedSecret) {
+    console.warn(
+      '[env] SESSION_SECRET is not set. Using a random value generated for ' +
+        'this boot only: existing sessions will not survive a restart or a ' +
+        'redeploy, and this instance will not agree with any other running ' +
+        'instance. Set SESSION_SECRET before relying on login.'
+    );
+  }
+
+  return parsed.data as Env;
 }
 
 export const env: Env = loadEnv();
+
+/** True once a real DATABASE_URL has been provided, not the boot fallback. */
+export const isDatabaseConfigured = Boolean(process.env.DATABASE_URL);
+
+/** True once a real SESSION_SECRET has been provided, not the boot fallback. */
+export const isSessionConfigured = Boolean(process.env.SESSION_SECRET);
 
 /**
  * Payments are only "configured" when we can both charge and verify webhooks.

@@ -7,6 +7,7 @@ import {
   CardSkeleton,
   Container,
   EmptyState,
+  ErrorState,
   SectionHeading,
   Tag,
 } from '@/components/ui/primitives';
@@ -25,6 +26,7 @@ import {
 } from '@/server/services/professional-service';
 import { professionalFiltersSchema } from '@/lib/validation/schemas';
 import { formatRange } from '@/lib/money';
+import { resilient } from '@/lib/resilient';
 
 export const metadata: Metadata = {
   title: 'Profissionais',
@@ -177,7 +179,11 @@ export default async function ProfessionalsPage({
 }
 
 async function ProfessionalFilters() {
-  const facets = await getProfessionalFacets();
+  const { data: facets } = await resilient(
+    getProfessionalFacets,
+    [],
+    'professionals.facets'
+  );
 
   const fieldOptions = [
     { id: 'Todas as áreas', label: 'Todas as áreas' },
@@ -208,7 +214,20 @@ async function Results({
     ? parsed.data
     : professionalFiltersSchema.parse({});
 
-  const { items, total, page, pageCount } = await listProfessionals(filters);
+  const { data: listing, unavailable } = await resilient(
+    () => listProfessionals(filters),
+    { items: [], total: 0, page: 1, pageCount: 1 },
+    'professionals.listing'
+  );
+  const { items, total, page, pageCount } = listing;
+
+  if (unavailable) {
+    return (
+      <div className="mt-8">
+        <ErrorState description="Não conseguimos carregar os profissionais agora. Tente novamente em instantes." />
+      </div>
+    );
+  }
 
   if (items.length === 0) {
     return (

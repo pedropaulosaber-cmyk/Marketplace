@@ -3,6 +3,7 @@ import type Stripe from 'stripe';
 import { db } from '@/server/db/client';
 import { verifyWebhook } from '@/server/payments/provider';
 import { markOrderFailed, markOrderPaid } from '@/server/services/order-service';
+import { reverseCommissionsForOrder } from '@/server/services/affiliate-service';
 import { audit } from '@/server/security/audit';
 import { isPaymentsConfigured } from '@/lib/env';
 import { log, securityLog } from '@/lib/logger';
@@ -159,6 +160,11 @@ async function handleEvent(event: Stripe.Event): Promise<void> {
           },
           data: { status: 'FAILED' },
         });
+
+        // Same reasoning for the affiliate: a refunded sale earns nobody a
+        // commission. Already-paid commissions are left alone — that is
+        // settled money, and clawing it back belongs to a separate process.
+        await reverseCommissionsForOrder(tx, payment.orderId);
 
         await audit(
           {

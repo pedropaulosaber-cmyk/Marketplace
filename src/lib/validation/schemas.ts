@@ -318,3 +318,34 @@ export const categorySchema = z.object({
   parentId: cuid.optional().or(z.literal('')),
   position: z.number().int().min(0).max(999).default(0),
 });
+
+// --- Affiliate programme -----------------------------------------------------
+
+/**
+ * Commission is capped at 80%: the platform fee is 15%, so anything above that
+ * could not be paid out of the seller's share. The same ceiling is enforced by
+ * a check constraint in the database — this one exists to give the creator a
+ * readable error instead of a failed write.
+ */
+export const affiliateProgramSchema = z.object({
+  productId: cuid,
+  enabled: z.coerce.boolean().default(false),
+  commissionPercent: z.coerce
+    .number({ invalid_type_error: 'Informe a comissão em porcentagem.' })
+    .min(1, 'A comissão mínima é 1%.')
+    .max(80, 'A comissão máxima é 80%.'),
+  cookieDays: z.coerce
+    .number({ invalid_type_error: 'Informe a janela de atribuição em dias.' })
+    .int('Use um número inteiro de dias.')
+    .min(1, 'A janela mínima é 1 dia.')
+    .max(365, 'A janela máxima é 365 dias.'),
+  autoApprove: z.coerce.boolean().default(true),
+  terms: longText(0, 2000, 'Regras').optional().or(z.literal('')),
+});
+
+export const joinAffiliateSchema = z.object({ productId: cuid });
+
+export const affiliateDecisionSchema = z.object({
+  affiliateId: cuid,
+  status: z.enum(['APPROVED', 'REJECTED', 'BLOCKED']),
+});

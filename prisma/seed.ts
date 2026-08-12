@@ -880,6 +880,75 @@ async function main() {
   }
   console.log(`  products: ${productIds.length}`);
 
+  // --- Affiliate programmes -----------------------------------------------
+  // Roughly half the paid catalogue opens a programme, at rates that differ
+  // enough to exercise the split maths and the "you keep / they earn" preview.
+  const CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+  const seedCode = (n: number) =>
+    Array.from(
+      { length: 10 },
+      (_, i) => CODE_ALPHABET[(n * 7 + i * 13 + 5) % CODE_ALPHABET.length]
+    ).join('');
+
+  const openPrograms = await db.product.findMany({
+    where: { status: 'PUBLISHED', priceCents: { gt: 0 } },
+    orderBy: { slug: 'asc' },
+    select: { id: true, authorId: true },
+  });
+
+  let programCount = 0;
+  let affiliateCount = 0;
+
+  for (const [index, product] of openPrograms.entries()) {
+    if (index % 2 !== 0) continue;
+
+    const program = await db.affiliateProgram.upsert({
+      where: { productId: product.id },
+      create: {
+        productId: product.id,
+        ownerId: product.authorId,
+        enabled: true,
+        // 15%, 25% or 35% — cycled so the dashboard shows a real spread.
+        commissionBps: [1500, 2500, 3500][programCount % 3]!,
+        cookieDays: [7, 30, 60][programCount % 3]!,
+        autoApprove: programCount % 3 !== 1,
+        terms:
+          'Não anuncie usando o nome da marca em busca paga e não prometa resultado garantido. Divulgação por conteúdo, lista própria e redes sociais é livre.',
+      },
+      update: {},
+      select: { id: true, autoApprove: true },
+    });
+
+    programCount += 1;
+
+    // Two affiliates per programme, drawn from creators who do not own it.
+    const candidates = [...creators.entries()]
+      .filter(([, id]) => id !== product.authorId)
+      .slice(programCount % 5, (programCount % 5) + 2);
+
+    for (const [, userId] of candidates) {
+      await db.affiliate.upsert({
+        where: { programId_userId: { programId: program.id, userId } },
+        create: {
+          programId: program.id,
+          userId,
+          code: seedCode(affiliateCount + 1),
+          status: program.autoApprove ? 'APPROVED' : 'PENDING',
+          approvedAt: program.autoApprove ? new Date() : null,
+          clickCount: 40 + ((affiliateCount * 17) % 260),
+          conversionCount: 1 + ((affiliateCount * 3) % 9),
+        },
+        update: {},
+      });
+
+      affiliateCount += 1;
+    }
+  }
+
+  console.log(
+    `  affiliate programmes: ${programCount}, affiliates: ${affiliateCount}`
+  );
+
   // --- Orders + reviews ---------------------------------------------------
   // Gives the catalog real sales counts, real ratings and populated libraries.
   let orderCount = 0;

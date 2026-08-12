@@ -15,8 +15,14 @@ import { ProductGallery } from '@/components/marketplace/product-gallery';
 import { ProductVideo } from '@/components/marketplace/product-video';
 import { FavoriteButton } from '@/components/marketplace/favorite-button';
 import { publicUrl } from '@/server/storage';
+import {
+  getPublicProgram,
+  recordClick,
+} from '@/server/services/affiliate-service';
+import { isValidReferralCode } from '@/lib/affiliate';
 import { BuyButton } from './_components/buy-button';
 import { ReviewForm } from './_components/review-form';
+import { AffiliateCta } from './_components/affiliate-cta';
 import {
   getProductBySlug,
   getRelatedProducts,
@@ -29,6 +35,7 @@ import { formatPrice } from '@/lib/money';
 
 interface PageProps {
   params: Promise<{ slug: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }
 
 /**
@@ -123,13 +130,24 @@ const ASSURANCES = [
   'Pagamento processado pela Automatize',
 ] as const;
 
-export default async function ProductPage({ params }: PageProps) {
+export default async function ProductPage({ params, searchParams }: PageProps) {
   const { slug } = await params;
   const product = await getProductBySlug(slug);
 
   if (!product) notFound();
 
   const session = await getSession();
+
+  // A referral click is exactly one arrival carrying ?ref=, so counting here
+  // measures clicks rather than page views — a revisit from history or a
+  // bookmark still has the cookie but no longer has the parameter.
+  const query = await searchParams;
+  const ref = typeof query.ref === 'string' ? query.ref : undefined;
+  if (ref && isValidReferralCode(ref)) {
+    await recordClick(ref);
+  }
+
+  const program = await getPublicProgram(product.id);
 
   const [related, owned, reviewable, favorited] = await Promise.all([
     getRelatedProducts(product.id, product.categoryId, product.authorId),
@@ -450,6 +468,22 @@ export default async function ProductPage({ params }: PageProps) {
             </div>
           </aside>
         </div>
+
+        {program ? (
+          <AffiliateCta
+            productId={product.id}
+            productSlug={product.slug}
+            commissionPercent={(program.commissionBps / 100).toFixed(0)}
+            perSaleLabel={formatPrice(
+              Math.floor((product.priceCents * program.commissionBps) / 10_000)
+            )}
+            cookieDays={program.cookieDays}
+            autoApprove={program.autoApprove}
+            terms={program.terms}
+            signedIn={Boolean(session)}
+            isOwner={isOwnProduct}
+          />
+        ) : null}
 
         {related.length > 0 ? (
           <section className="mt-20 max-sm:mt-12">

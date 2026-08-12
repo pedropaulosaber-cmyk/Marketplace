@@ -41,9 +41,17 @@ export default async function DashboardLayout({
         { href: '/dashboard/customers', label: 'Clientes' },
         { href: '/dashboard/analytics', label: 'Analytics' },
         { href: '/dashboard/earnings', label: 'Receitas' },
+        { href: '/dashboard/affiliate/programs', label: 'Meus afiliados' },
       ],
     });
   }
+
+  // Promoting someone else's product needs no seller role — this is the entry
+  // point for anyone who wants to earn without publishing anything.
+  sections.push({
+    title: 'Afiliados',
+    items: [{ href: '/dashboard/affiliate', label: 'Produtos que promovo' }],
+  });
 
   sections.push({
     title: 'Contratação',

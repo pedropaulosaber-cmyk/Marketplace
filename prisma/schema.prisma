@@ -73,6 +73,9 @@ model User {
   messages      Message[]
   payouts       Payout[]
 
+  affiliatePrograms AffiliateProgram[]
+  affiliations      Affiliate[]
+
   @@index([status])
   @@index([createdAt])
   @@map("users")
@@ -231,6 +234,7 @@ model Product {
   favorites  Favorite[]
   orderItems OrderItem[]
   downloads  DownloadLog[]
+  affiliateProgram AffiliateProgram?
 
   // Composite indexes match the real listing queries: public catalog browse,
   // author dashboard, and the admin moderation queue.
@@ -365,15 +369,26 @@ model OrderItem {
 
   sellerId String
 
+  /// Set when the sale was attributed to an affiliate at checkout time. The
+  /// attribution is frozen here: revoking an affiliate later must not rewrite
+  /// what was already owed on a completed sale.
+  affiliateId    String?
+  /// Affiliate commission on this line, in cents. Comes out of the seller's
+  /// share, never out of the platform fee.
+  affiliateCents Int     @default(0)
+
   createdAt DateTime @default(now())
 
-  order   Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  product Product @relation(fields: [productId], references: [id])
+  order      Order      @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product    Product    @relation(fields: [productId], references: [id])
+  affiliate  Affiliate? @relation(fields: [affiliateId], references: [id], onDelete: SetNull)
+  commission AffiliateCommission?
 
   // One product may appear only once per order — quantity carries the count.
   @@unique([orderId, productId])
   @@index([productId])
   @@index([sellerId])
+  @@index([affiliateId])
   @@map("order_items")
 }
 
@@ -753,6 +768,123 @@ model Message {
 
   @@index([conversationId, createdAt])
   @@map("messages")
+}
+
+// ===========================================================================
+// Affiliate programme
+// ===========================================================================
+
+enum AffiliateStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  BLOCKED
+}
+
+enum CommissionStatus {
+  PENDING
+  APPROVED
+  PAID
+  REVERSED
+}
+
+/// A creator's affiliate programme for one product.
+///
+/// Scoped per product rather than per creator because commission economics
+/// differ per product: a R$ 49 template and a R$ 2.000 agent cannot carry the
+/// same rate, and a creator must be able to open one to affiliates without
+/// opening the whole catalogue.
+model AffiliateProgram {
+  id        String @id @default(cuid())
+  productId String @unique
+  ownerId   String
+
+  enabled Boolean @default(true)
+
+  /// Commission in basis points of the product price (2000 = 20%). Paid out
+  /// of the seller's share, so the platform fee is unaffected.
+  commissionBps Int @default(2000)
+
+  /// Attribution window in days — how long a referral click keeps the claim.
+  cookieDays Int @default(30)
+
+  /// Whether a new affiliate is live immediately or waits for the creator.
+  autoApprove Boolean @default(true)
+
+  terms String? @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  product    Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
+  owner      User        @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  affiliates Affiliate[]
+
+  @@index([ownerId])
+  @@index([enabled])
+  @@map("affiliate_programs")
+}
+
+/// One person promoting one product.
+///
+/// Click and conversion counts are kept as counters rather than a row per
+/// click: click volume is the highest-cardinality event on the platform, and
+/// an unbounded log would dominate the database long before it earned its
+/// keep. Per-sale detail is recoverable from the commission ledger.
+model Affiliate {
+  id        String @id @default(cuid())
+  programId String
+  userId    String
+
+  /// Public referral code, generated rather than chosen — it appears in URLs
+  /// and must not be guessable or impersonate another creator's brand.
+  code String @unique
+
+  status AffiliateStatus @default(PENDING)
+
+  clickCount      Int @default(0)
+  conversionCount Int @default(0)
+
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  approvedAt DateTime?
+
+  program     AffiliateProgram      @relation(fields: [programId], references: [id], onDelete: Cascade)
+  user        User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orderItems  OrderItem[]
+  commissions AffiliateCommission[]
+
+  // One affiliation per person per programme.
+  @@unique([programId, userId])
+  @@index([userId, status])
+  @@index([programId, status])
+  @@map("affiliates")
+}
+
+/// Commission ledger. One row per attributed sale, written inside the same
+/// transaction that settles the order so a paid sale can never leave the
+/// affiliate unpaid, nor a reversal leave a commission standing.
+model AffiliateCommission {
+  id          String @id @default(cuid())
+  affiliateId String
+  orderItemId String @unique
+
+  amountCents Int
+  status      CommissionStatus @default(PENDING)
+
+  /// Held until the refund window closes; only then is it payable.
+  availableAt DateTime
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  paidAt    DateTime?
+
+  affiliate Affiliate @relation(fields: [affiliateId], references: [id], onDelete: Cascade)
+  orderItem OrderItem @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+
+  @@index([affiliateId, status])
+  @@index([status, availableAt])
+  @@map("affiliate_commissions")
 }
 
 // ===========================================================================

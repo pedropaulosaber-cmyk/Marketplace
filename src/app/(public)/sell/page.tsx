@@ -5,6 +5,7 @@ import {
   Eyebrow,
   SectionHeading,
 } from '@/components/ui/primitives';
+import { EarningsCalculator } from './_components/earnings-calculator';
 
 export const metadata: Metadata = {
   title: 'Vender na AUTOMATIZE',
@@ -175,6 +176,12 @@ export default function SellPage() {
           </ul>
         </Container>
       </section>
+
+      <Container className="mt-20 max-sm:mt-12">
+        <div className="mx-auto max-w-[720px]">
+          <EarningsCalculator />
+        </div>
+      </Container>
 
       <Container className="mt-24 max-sm:mt-14">
         <SectionHeading eyebrow="Como funciona" title="Publique a primeira em uma tarde." />

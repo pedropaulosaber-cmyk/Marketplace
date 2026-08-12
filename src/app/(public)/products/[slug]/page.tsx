@@ -9,8 +9,12 @@ import {
   Thumb,
 } from '@/components/ui/primitives';
 import { LinkButton } from '@/components/ui/button';
+import { Markdown } from '@/components/ui/markdown';
 import { ProductCardCompact } from '@/components/marketplace/product-card';
+import { ProductGallery } from '@/components/marketplace/product-gallery';
+import { ProductVideo } from '@/components/marketplace/product-video';
 import { FavoriteButton } from '@/components/marketplace/favorite-button';
+import { publicUrl } from '@/server/storage';
 import { BuyButton } from './_components/buy-button';
 import { ReviewForm } from './_components/review-form';
 import {
@@ -147,6 +151,12 @@ export default async function ProductPage({ params }: PageProps) {
     product.ratingCount > 0 ? product.ratingSum / product.ratingCount : null;
   const isOwnProduct = session?.id === product.authorId;
 
+  const galleryImages = product.images.map((image) => ({
+    id: image.id,
+    src: publicUrl(image.storageKey),
+    alt: image.alt,
+  }));
+
   return (
     <>
       <ProductStructuredData
@@ -209,7 +219,23 @@ export default async function ProductPage({ params }: PageProps) {
               <Rating value={average} count={product.ratingCount} className="text-[14px]" />
             </div>
 
-            <Thumb className="mt-8 h-[320px] w-full max-sm:h-[190px]" />
+            <div className="mt-8 flex flex-col gap-5">
+              {galleryImages.length > 0 ? (
+                <ProductGallery images={galleryImages} />
+              ) : (
+                <Thumb className="h-[320px] w-full max-sm:h-[190px]" />
+              )}
+
+              {product.videoUrl ? (
+                <ProductVideo url={product.videoUrl} productName={product.name} />
+              ) : null}
+            </div>
+
+            {product.descriptionMd.trim() ? (
+              <Section title="Sobre o produto">
+                <Markdown source={product.descriptionMd} />
+              </Section>
+            ) : null}
 
             <Section title="Benefícios">
               <ul className="flex flex-col gap-3">

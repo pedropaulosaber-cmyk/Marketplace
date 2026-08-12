@@ -50,6 +50,14 @@ const CREATORS = [
   { name: 'Diego Salles', email: 'diego@automatize.dev' },
   { name: 'Tomás Bianchi', email: 'tomas@automatize.dev' },
   { name: 'Helena Prado', email: 'helena@automatize.dev' },
+  { name: 'Bruno Tavares', email: 'bruno@automatize.dev' },
+  { name: 'Juliana Kim', email: 'juliana@automatize.dev' },
+  { name: 'Ricardo Mendes', email: 'ricardo@automatize.dev' },
+  { name: 'Patrícia Lobo', email: 'patricia@automatize.dev' },
+  { name: 'Fernando Aguiar', email: 'fernando@automatize.dev' },
+  { name: 'Larissa Fontes', email: 'larissa@automatize.dev' },
+  { name: 'Gustavo Rocha', email: 'gustavo@automatize.dev' },
+  { name: 'Beatriz Nunes', email: 'beatriz@automatize.dev' },
 ] as const;
 
 const PRODUCTS = [
@@ -161,6 +169,168 @@ const PRODUCTS = [
     tags: ['Marketing', 'Conteúdo'],
     integrations: ['Shopify', 'OpenAI'],
   },
+  {
+    name: 'Agente de Cobrança Amigável',
+    category: 'AI Agents',
+    tagline: 'Recupera inadimplência por WhatsApp sem queimar o relacionamento.',
+    priceCents: 21_900,
+    author: 'bruno@automatize.dev',
+    tags: ['Financeiro', 'WhatsApp'],
+    integrations: ['WhatsApp', 'Omie', 'n8n'],
+  },
+  {
+    name: 'Onboarding de Clientes Automático',
+    category: 'Workflows',
+    tagline: 'Do contrato assinado ao acesso liberado sem ninguém tocar.',
+    priceCents: 13_900,
+    author: 'juliana@automatize.dev',
+    tags: ['Customer Success', 'Produtividade'],
+    integrations: ['Slack', 'Notion', 'Make'],
+  },
+  {
+    name: 'Chatbot de Agendamento Médico',
+    category: 'Chatbots',
+    tagline: 'Marca, confirma e remarca consultas direto na agenda da clínica.',
+    priceCents: 27_900,
+    author: 'patricia@automatize.dev',
+    tags: ['Saúde', 'Atendimento'],
+    integrations: ['WhatsApp', 'Google Calendar'],
+  },
+  {
+    name: 'Analisador de Currículos',
+    category: 'AI Agents',
+    tagline: 'Lê 400 currículos e devolve os 10 que importam, com justificativa.',
+    priceCents: 16_900,
+    author: 'ricardo@automatize.dev',
+    tags: ['RH', 'Dados'],
+    integrations: ['OpenAI', 'Google Drive'],
+  },
+  {
+    name: 'Prompt Pack Jurídico',
+    category: 'Prompts',
+    tagline: '48 prompts revisados por advogados para peças, resumos e pareceres.',
+    priceCents: 8_900,
+    author: 'diego@automatize.dev',
+    tags: ['Jurídico', 'Prompts'],
+    integrations: ['OpenAI'],
+  },
+  {
+    name: 'Dashboard Financeiro Auto-Preenchido',
+    category: 'Templates',
+    tagline: 'DRE, fluxo de caixa e projeção atualizados sozinhos toda manhã.',
+    priceCents: 11_900,
+    author: 'fernando@automatize.dev',
+    tags: ['Financeiro', 'Dados'],
+    integrations: ['Google Sheets', 'Omie', 'n8n'],
+  },
+  {
+    name: 'Gerador de Propostas Comerciais',
+    category: 'Automações',
+    tagline: 'Da reunião gravada à proposta pronta para assinatura em 4 minutos.',
+    priceCents: 15_900,
+    author: 'larissa@automatize.dev',
+    tags: ['Vendas', 'Conteúdo'],
+    integrations: ['OpenAI', 'DocuSign', 'HubSpot'],
+  },
+  {
+    name: 'Monitor de Concorrência',
+    category: 'Workflows',
+    tagline: 'Avisa quando o concorrente muda preço, página ou anúncio.',
+    priceCents: 9_900,
+    author: 'gustavo@automatize.dev',
+    tags: ['Marketing', 'Dados'],
+    integrations: ['APIs', 'Slack', 'Python'],
+  },
+  {
+    name: 'Atendente de E-commerce 24h',
+    category: 'Chatbots',
+    tagline: 'Responde rastreio, troca e dúvida de produto sem fila de espera.',
+    priceCents: 22_900,
+    author: 'beatriz@automatize.dev',
+    tags: ['E-commerce', 'Atendimento'],
+    integrations: ['Shopify', 'WhatsApp', 'OpenAI'],
+  },
+  {
+    name: 'Classificador de Tickets de Suporte',
+    category: 'AI Agents',
+    tagline: 'Etiqueta, prioriza e roteia chamados pelo conteúdo real do texto.',
+    priceCents: 14_900,
+    author: 'juliana@automatize.dev',
+    tags: ['Atendimento', 'Produtividade'],
+    integrations: ['Zendesk', 'OpenAI'],
+  },
+  {
+    name: 'Pipeline de Nota Fiscal',
+    category: 'Automações',
+    tagline: 'Captura, valida e arquiva NF-e sem digitação manual.',
+    priceCents: 17_900,
+    author: 'fernando@automatize.dev',
+    tags: ['Financeiro', 'Fiscal'],
+    integrations: ['Omie', 'Google Drive', 'n8n'],
+  },
+  {
+    name: 'Kit de Prompts para Marketing',
+    category: 'Prompts',
+    tagline: '60 prompts de campanha, anúncio e e-mail com exemplos reais.',
+    priceCents: 0,
+    author: 'larissa@automatize.dev',
+    tags: ['Marketing', 'Prompts'],
+    integrations: ['OpenAI'],
+  },
+  {
+    name: 'Template de Base de Conhecimento',
+    category: 'Templates',
+    tagline: 'Estrutura de documentação que a IA da empresa consegue ler.',
+    priceCents: 6_900,
+    author: 'patricia@automatize.dev',
+    tags: ['Produtividade', 'Conteúdo'],
+    integrations: ['Notion', 'OpenAI'],
+  },
+  {
+    name: 'Agente de Pesquisa de Mercado',
+    category: 'AI Agents',
+    tagline: 'Levanta players, preço e posicionamento e entrega o relatório.',
+    priceCents: 19_900,
+    author: 'gustavo@automatize.dev',
+    tags: ['Marketing', 'Dados'],
+    integrations: ['OpenAI', 'APIs', 'Notion'],
+  },
+  {
+    name: 'Recuperação de Carrinho Abandonado',
+    category: 'Workflows',
+    tagline: 'Sequência multicanal que traz de volta quem quase comprou.',
+    priceCents: 12_900,
+    author: 'beatriz@automatize.dev',
+    tags: ['E-commerce', 'Vendas'],
+    integrations: ['Shopify', 'WhatsApp', 'Make'],
+  },
+  {
+    name: 'Resumo Diário de Notícias do Setor',
+    category: 'Automações',
+    tagline: 'Um e-mail às 7h com o que realmente mudou no seu mercado.',
+    priceCents: 0,
+    author: 'ricardo@automatize.dev',
+    tags: ['Conteúdo', 'Produtividade'],
+    integrations: ['APIs', 'Gmail', 'OpenAI'],
+  },
+  {
+    name: 'Bot de Triagem de Leads no Instagram',
+    category: 'Chatbots',
+    tagline: 'Responde o direct, qualifica e joga o lead quente no CRM.',
+    priceCents: 18_900,
+    author: 'bruno@automatize.dev',
+    tags: ['Vendas', 'Social'],
+    integrations: ['Instagram', 'HubSpot', 'Make'],
+  },
+  {
+    name: 'Auditor de Qualidade de Dados',
+    category: 'Workflows',
+    tagline: 'Encontra duplicata, campo vazio e valor impossível antes do relatório.',
+    priceCents: 15_900,
+    author: 'tomas@automatize.dev',
+    tags: ['Dados', 'Produtividade'],
+    integrations: ['Python', 'Google Sheets', 'n8n'],
+  },
 ] as const;
 
 const PROFESSIONALS = [
@@ -270,6 +440,114 @@ const PROFESSIONALS = [
       ['Confirmação automática em rede de clínicas', '3 semanas · R$ 8.900'],
       ['Resumo de anamnese por voz', '4 semanas · R$ 9.600'],
       ['Fila de espera inteligente', '2 semanas · R$ 4.100'],
+    ],
+  },
+  {
+    email: 'bruno@automatize.dev',
+    title: 'Automação Financeira',
+    field: 'Financeiro',
+    bio: 'Contas a receber, cobrança e conciliação em fluxo único. Reduziu inadimplência em operações de 200 a 20 mil clientes.',
+    skills: ['Omie', 'n8n', 'WhatsApp', 'Dados'],
+    rateMinCents: 400_000,
+    rateMaxCents: 1_500_000,
+    location: 'Curitiba, BR',
+    availability: 'NOW' as const,
+    verified: true,
+    projects: 29,
+    works: [
+      ['Régua de cobrança multicanal', '4 semanas · R$ 12.300'],
+      ['Conciliação bancária automática', '3 semanas · R$ 8.700'],
+      ['Painel de inadimplência por carteira', '2 semanas · R$ 5.400'],
+    ],
+  },
+  {
+    email: 'juliana@automatize.dev',
+    title: 'Customer Success Ops',
+    field: 'Operações',
+    bio: 'Desenha onboarding e retenção que rodam sozinhos. Especialista em transformar processo de planilha em fluxo auditável.',
+    skills: ['Notion', 'Make', 'Slack', 'Zendesk'],
+    rateMinCents: 300_000,
+    rateMaxCents: 1_100_000,
+    location: 'Florianópolis, BR',
+    availability: 'SOON' as const,
+    verified: true,
+    projects: 41,
+    works: [
+      ['Onboarding automatizado para SaaS B2B', '5 semanas · R$ 14.200'],
+      ['Health score de carteira', '3 semanas · R$ 7.800'],
+      ['Central de conhecimento com IA', '4 semanas · R$ 10.500'],
+    ],
+  },
+  {
+    email: 'patricia@automatize.dev',
+    title: 'Chatbots e Atendimento',
+    field: 'Atendimento',
+    bio: 'Constrói assistentes que resolvem de verdade em vez de empurrar para o humano. Foco em saúde e serviços.',
+    skills: ['WhatsApp', 'Chatbots', 'OpenAI', 'Google Calendar'],
+    rateMinCents: 280_000,
+    rateMaxCents: 950_000,
+    location: 'Recife, BR',
+    availability: 'NOW' as const,
+    verified: false,
+    projects: 23,
+    works: [
+      ['Assistente de agendamento para clínica', '3 semanas · R$ 7.400'],
+      ['Triagem de convênio por WhatsApp', '2 semanas · R$ 4.900'],
+      ['Pesquisa de satisfação automatizada', '1 semana · R$ 2.600'],
+    ],
+  },
+  {
+    email: 'fernando@automatize.dev',
+    title: 'Dados e Business Intelligence',
+    field: 'Dados',
+    bio: 'Tira o número da planilha e coloca em painel que a diretoria confia. Modelagem, pipeline e governança.',
+    skills: ['Python', 'Google Sheets', 'Dados', 'APIs'],
+    rateMinCents: 600_000,
+    rateMaxCents: 2_200_000,
+    location: 'São Paulo, BR',
+    availability: 'FULL' as const,
+    verified: true,
+    projects: 56,
+    works: [
+      ['Data warehouse para varejo multicanal', '8 semanas · R$ 32.000'],
+      ['DRE automatizado com projeção', '4 semanas · R$ 13.500'],
+      ['Auditoria de qualidade de base', '2 semanas · R$ 6.200'],
+    ],
+  },
+  {
+    email: 'larissa@automatize.dev',
+    title: 'Growth e Conteúdo com IA',
+    field: 'Marketing',
+    bio: 'Escala produção de conteúdo e campanha sem perder a voz da marca. Trabalha com times de 1 a 40 pessoas.',
+    skills: ['OpenAI', 'Conteúdo', 'HubSpot', 'Make'],
+    rateMinCents: 250_000,
+    rateMaxCents: 900_000,
+    location: 'Rio de Janeiro, BR',
+    availability: 'NOW' as const,
+    verified: false,
+    projects: 34,
+    works: [
+      ['Motor de conteúdo para blog e social', '4 semanas · R$ 9.900'],
+      ['Gerador de proposta comercial', '3 semanas · R$ 7.100'],
+      ['Campanha de reativação por e-mail', '2 semanas · R$ 4.800'],
+    ],
+  },
+  {
+    email: 'gustavo@automatize.dev',
+    title: 'Integrações e APIs',
+    field: 'Engenharia',
+    bio: 'Conecta o que não foi feito para conversar. Webhooks, filas e retry — o encanamento que ninguém vê e todo mundo depende.',
+    skills: ['APIs', 'Python', 'n8n', 'Dados'],
+    rateMinCents: 550_000,
+    rateMaxCents: 2_000_000,
+    location: 'Porto Alegre, BR',
+    availability: 'SOON' as const,
+    verified: true,
+    projects: 61,
+    works: [
+      ['Integração ERP legado com e-commerce', '7 semanas · R$ 27.500'],
+      ['Monitor de concorrência com scraping', '3 semanas · R$ 8.300'],
+      ['Camada de eventos para microserviços', '6 semanas · R$ 21.000'],
     ],
   },
 ] as const;
@@ -466,12 +744,18 @@ async function main() {
 
   // --- Products -----------------------------------------------------------
   const productIds: string[] = [];
+  let productIndex = 0;
   for (const item of PRODUCTS) {
     const authorId = creators.get(item.author);
     const categoryId = categories.get(item.category);
     if (!authorId || !categoryId) continue;
 
     const slug = slugify(item.name);
+    const toolList = item.integrations.join(', ');
+    // Every third product ships a demo video, so the product page exercises
+    // both layouts. Placeholder ids — replace with real recordings.
+    const hasVideo = productIndex % 3 === 0;
+    productIndex += 1;
 
     const product = await db.product.upsert({
       where: { slug },
@@ -480,16 +764,29 @@ async function main() {
         name: item.name,
         tagline: item.tagline,
         descriptionMd: [
-          `## O que ${item.name} resolve`,
+          `## O que o ${item.name} resolve`,
           '',
           item.tagline,
           '',
-          'Esta solução foi construída para entrar em produção rápido: as regras de negócio são configuráveis por formulário, cada execução fica registrada para auditoria, e o painel acompanha volume, custo e falhas desde o primeiro dia.',
+          `O que hoje consome horas da equipe passa a rodar sozinho, em cima de ${toolList} — as ferramentas que você já usa. Sem trocar de sistema, sem migrar base, sem projeto de seis meses.`,
+          '',
+          '## Como ele trabalha',
+          '',
+          'As regras de negócio são configuráveis por formulário: você define os critérios, os limites e o tom das respostas sem tocar em código. Cada execução fica registrada, então dá para auditar exatamente o que foi decidido e por quê.',
+          '',
+          'Quando alguma coisa foge do previsto, o fluxo para e avisa em vez de seguir adiante com dado errado. O painel acompanha volume, custo por execução e taxa de falha desde o primeiro dia em produção.',
           '',
           '## Para quem é',
           '',
-          'Times que já usam as ferramentas listadas em integrações e querem eliminar trabalho manual repetitivo sem trocar o sistema que já funciona.',
+          `Times que já usam ${toolList} e querem eliminar trabalho manual repetitivo. Funciona igualmente bem para uma operação enxuta que precisa ganhar escala e para um time grande que precisa padronizar o que hoje cada pessoa faz de um jeito.`,
+          '',
+          '## Para quem não é',
+          '',
+          'Se o seu processo ainda não está definido no papel, automatizar só vai acelerar a bagunça. Vale desenhar o fluxo antes — e nesse caso vale mais contratar um profissional na plataforma do que comprar um produto pronto.',
         ].join('\n'),
+        videoUrl: hasVideo
+          ? `https://www.youtube-nocookie.com/embed/demo-${slug}`
+          : null,
         categoryId,
         authorId,
         priceCents: item.priceCents,
@@ -525,6 +822,26 @@ async function main() {
     });
 
     productIds.push(product.id);
+
+    // Gallery. The storage keys are deterministic placeholders — no bytes
+    // exist in the bucket yet. The gallery falls back to a styled placeholder
+    // when an image fails to load, so the layout is right either way and real
+    // uploads drop straight in later.
+    await db.productImage.deleteMany({ where: { productId: product.id } });
+    await db.productImage.createMany({
+      data: [
+        `Tela principal do ${item.name}`,
+        `Painel de acompanhamento do ${item.name}`,
+        `Configuração das regras do ${item.name}`,
+      ].map((alt, position) => ({
+        productId: product.id,
+        storageKey: `demo/products/${slug}/${position + 1}.png`,
+        alt,
+        width: 1280,
+        height: 720,
+        position,
+      })),
+    });
 
     // Tags
     for (const tagName of item.tags) {

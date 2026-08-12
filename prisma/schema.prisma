@@ -1,0 +1,827 @@
+// ---------------------------------------------------------------------------
+// AUTOMATIZE — marketplace de soluções de IA
+//
+// Conventions used throughout this schema:
+//   * Money is stored as integer cents (BRL). Never float — rounding errors in
+//     a financial ledger are unacceptable.
+//   * Every table carries createdAt/updatedAt.
+//   * Records referenced by financial history are soft-deleted (deletedAt) so
+//     an order never points at a vanished product.
+//   * Every foreign key used in a filter or sort has an explicit index.
+// ---------------------------------------------------------------------------
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ===========================================================================
+// Identity & access
+// ===========================================================================
+
+enum Role {
+  BUYER
+  CREATOR
+  PROFESSIONAL
+  ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  BANNED
+}
+
+model User {
+  id           String     @id @default(cuid())
+  email        String     @unique
+  // Argon2id hash. Never a plaintext password, never a reversible encoding.
+  passwordHash String
+  name         String
+  status       UserStatus @default(ACTIVE)
+
+  emailVerifiedAt DateTime?
+
+  // Failed-login throttling state, enforced server-side.
+  failedLoginCount Int       @default(0)
+  lockedUntil      DateTime?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  profile      Profile?
+  roles        UserRole[]
+  sessions     Session[]
+  professional ProfessionalProfile?
+
+  products      Product[]
+  orders        Order[]
+  reviews       Review[]
+  reviewReplies ReviewReply[]
+  favorites     Favorite[]
+  demands       Demand[]
+  proposals     Proposal[]
+  downloads     DownloadLog[]
+  notifications Notification[]
+  auditLogs     AuditLog[]
+  participations ConversationParticipant[]
+  messages      Message[]
+  payouts       Payout[]
+
+  @@index([status])
+  @@index([createdAt])
+  @@map("users")
+}
+
+/// Roles are a join table rather than a column so one account can hold several
+/// (a creator who also buys, an admin who also sells) without a migration.
+model UserRole {
+  id     String @id @default(cuid())
+  userId String
+  role   Role
+
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, role])
+  @@index([role])
+  @@map("user_roles")
+}
+
+model Profile {
+  id     String @id @default(cuid())
+  userId String @unique
+
+  headline  String?
+  bio       String? @db.Text
+  avatarKey String?
+  company   String?
+  website   String?
+  location  String?
+  // BCP-47 locale, e.g. pt-BR
+  locale    String  @default("pt-BR")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("profiles")
+}
+
+/// Opaque server-side sessions. The cookie holds a random token; the database
+/// stores only its HMAC fingerprint, so a database leak cannot be replayed as
+/// a valid session.
+model Session {
+  id             String   @id @default(cuid())
+  userId         String
+  tokenHash      String   @unique
+  expiresAt      DateTime
+  // Rotated on privilege change; used to detect fixation attempts.
+  lastActivityAt DateTime @default(now())
+  ipHash         String?
+  userAgent      String?
+
+  createdAt DateTime  @default(now())
+  revokedAt DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("sessions")
+}
+
+// ===========================================================================
+// Catalog
+// ===========================================================================
+
+enum ProductStatus {
+  DRAFT
+  PENDING_REVIEW
+  PUBLISHED
+  REJECTED
+  ARCHIVED
+}
+
+model Category {
+  id       String  @id @default(cuid())
+  slug     String  @unique
+  name     String
+  // Self-referencing tree: a subcategory points at its parent.
+  parentId String?
+  position Int     @default(0)
+  icon     String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  parent   Category?  @relation("CategoryTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children Category[] @relation("CategoryTree")
+  products Product[]
+
+  @@index([parentId])
+  @@map("categories")
+}
+
+model Tag {
+  id   String @id @default(cuid())
+  slug String @unique
+  name String
+
+  products ProductTag[]
+
+  @@map("tags")
+}
+
+model Product {
+  id       String @id @default(cuid())
+  slug     String @unique
+  name     String
+  tagline  String
+  descriptionMd String @db.Text
+
+  categoryId String
+  authorId   String
+
+  /// Price in integer cents (BRL). 0 means a free product.
+  priceCents Int    @default(0)
+  currency   String @default("BRL")
+
+  status ProductStatus @default(DRAFT)
+
+  // Moderation trail — set by admins, never by the author.
+  submittedAt      DateTime?
+  publishedAt      DateTime?
+  reviewedById     String?
+  reviewedAt       DateTime?
+  rejectionReason  String?   @db.Text
+
+  videoUrl String?
+
+  // Denormalized aggregates. Maintained inside the same transaction as the
+  // write that changes them, so listings never need an N+1 aggregate query.
+  ratingSum   Int @default(0)
+  ratingCount Int @default(0)
+  salesCount  Int @default(0)
+
+  // Long-form structured content shown on the product page.
+  benefits     String[] @default([])
+  included     String[] @default([])
+  requirements String[] @default([])
+  compat       String[] @default([])
+  integrations String[] @default([])
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  category   Category      @relation(fields: [categoryId], references: [id])
+  author     User          @relation(fields: [authorId], references: [id])
+  images     ProductImage[]
+  files      ProductFile[]
+  tags       ProductTag[]
+  reviews    Review[]
+  favorites  Favorite[]
+  orderItems OrderItem[]
+  downloads  DownloadLog[]
+
+  // Composite indexes match the real listing queries: public catalog browse,
+  // author dashboard, and the admin moderation queue.
+  @@index([status, publishedAt(sort: Desc)])
+  @@index([status, categoryId])
+  @@index([authorId, status])
+  @@index([status, priceCents])
+  @@index([status, salesCount(sort: Desc)])
+  @@map("products")
+}
+
+model ProductTag {
+  productId String
+  tagId     String
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  tag     Tag     @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([productId, tagId])
+  @@index([tagId])
+  @@map("product_tags")
+}
+
+model ProductImage {
+  id        String @id @default(cuid())
+  productId String
+  /// Object-storage key in the PUBLIC bucket. Images are not gated content.
+  storageKey String
+  alt       String
+  width     Int?
+  height    Int?
+  position  Int    @default(0)
+
+  createdAt DateTime @default(now())
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId, position])
+  @@map("product_images")
+}
+
+/// The actual deliverable. Lives in the PRIVATE bucket and is only ever
+/// reachable through a short-lived signed URL issued after an entitlement
+/// check — the key is never exposed to a client.
+model ProductFile {
+  id        String @id @default(cuid())
+  productId String
+
+  storageKey  String
+  fileName    String
+  contentType String
+  sizeBytes   Int
+  /// SHA-256 of the uploaded bytes, for integrity verification.
+  checksum    String
+  version     String @default("1.0.0")
+
+  createdAt DateTime  @default(now())
+  deletedAt DateTime?
+
+  product   Product       @relation(fields: [productId], references: [id], onDelete: Cascade)
+  downloads DownloadLog[]
+
+  @@index([productId])
+  @@map("product_files")
+}
+
+// ===========================================================================
+// Commerce
+// ===========================================================================
+
+enum OrderStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+  CANCELLED
+}
+
+enum PaymentStatus {
+  REQUIRES_ACTION
+  PROCESSING
+  SUCCEEDED
+  FAILED
+  REFUNDED
+}
+
+model Order {
+  id     String @id @default(cuid())
+  /// Human-facing reference shown to the buyer, e.g. "AUT-8F3K2Q".
+  number String @unique
+  buyerId String
+
+  status OrderStatus @default(PENDING)
+
+  /// Totals in cents, computed server-side from the catalog at order time.
+  /// The client never supplies an amount.
+  subtotalCents Int
+  feeCents      Int
+  totalCents    Int
+  currency      String @default("BRL")
+
+  placedAt   DateTime  @default(now())
+  paidAt     DateTime?
+  refundedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  buyer   User        @relation(fields: [buyerId], references: [id])
+  items   OrderItem[]
+  payment Payment?
+
+  @@index([buyerId, status])
+  @@index([status, placedAt(sort: Desc)])
+  @@map("orders")
+}
+
+model OrderItem {
+  id      String @id @default(cuid())
+  orderId String
+  productId String
+
+  /// Snapshot of name and price at purchase time. A later price change or a
+  /// renamed product must not rewrite history.
+  productName String
+  unitCents   Int
+  quantity    Int    @default(1)
+  /// Platform commission on this line, in cents.
+  feeCents    Int
+  /// What the seller is owed for this line, in cents.
+  sellerCents Int
+
+  sellerId String
+
+  createdAt DateTime @default(now())
+
+  order   Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id])
+
+  // One product may appear only once per order — quantity carries the count.
+  @@unique([orderId, productId])
+  @@index([productId])
+  @@index([sellerId])
+  @@map("order_items")
+}
+
+model Payment {
+  id      String @id @default(cuid())
+  orderId String @unique
+
+  provider   String @default("stripe")
+  /// Provider-side identifier (e.g. PaymentIntent id).
+  providerRef String @unique
+  status     PaymentStatus @default(PROCESSING)
+
+  amountCents Int
+  currency    String @default("BRL")
+
+  failureReason String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([status])
+  @@map("payments")
+}
+
+/// Webhook idempotency ledger. A provider may deliver the same event many
+/// times; recording the id inside the handling transaction makes replay a
+/// no-op and prevents double-fulfilment or double-payout.
+model ProcessedWebhookEvent {
+  id          String   @id @default(cuid())
+  provider    String
+  eventId     String
+  eventType   String
+  processedAt DateTime @default(now())
+
+  @@unique([provider, eventId])
+  @@map("processed_webhook_events")
+}
+
+enum PayoutStatus {
+  SCHEDULED
+  PAID
+  FAILED
+}
+
+/// Seller earnings ledger. Written when an order is paid; settled D+15 per the
+/// published commission terms.
+model Payout {
+  id       String @id @default(cuid())
+  sellerId String
+
+  amountCents Int
+  currency    String       @default("BRL")
+  status      PayoutStatus @default(SCHEDULED)
+  scheduledFor DateTime
+  paidAt      DateTime?
+  reference   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  seller User @relation(fields: [sellerId], references: [id])
+
+  @@index([sellerId, status])
+  @@index([status, scheduledFor])
+  @@map("payouts")
+}
+
+/// Audit trail for every issued download. Doubles as abuse detection input.
+model DownloadLog {
+  id     String @id @default(cuid())
+  userId String
+  productId String
+  fileId String
+
+  ipHash    String?
+  userAgent String?
+
+  createdAt DateTime @default(now())
+
+  user    User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
+  file    ProductFile @relation(fields: [fileId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([productId])
+  @@map("download_logs")
+}
+
+// ===========================================================================
+// Social proof
+// ===========================================================================
+
+model Review {
+  id        String @id @default(cuid())
+  productId String
+  authorId  String
+
+  /// 1–5. Enforced by a check constraint in the migration as well as in Zod.
+  rating  Int
+  comment String @db.Text
+
+  /// The paid order that entitles this review. Its presence is what makes the
+  /// review "verified" — reviews cannot exist without a purchase.
+  orderId String
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  product Product      @relation(fields: [productId], references: [id], onDelete: Cascade)
+  author  User         @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  reply   ReviewReply?
+
+  // One review per buyer per product — duplicates are impossible by schema.
+  @@unique([productId, authorId])
+  @@index([productId, createdAt(sort: Desc)])
+  @@map("reviews")
+}
+
+model ReviewReply {
+  id       String @id @default(cuid())
+  reviewId String @unique
+  authorId String
+
+  body String @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  review Review @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  author User   @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@map("review_replies")
+}
+
+model Favorite {
+  id     String @id @default(cuid())
+  userId String
+
+  // Exactly one of these is set; enforced by a check constraint.
+  productId      String?
+  professionalId String?
+
+  createdAt DateTime @default(now())
+
+  user         User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product      Product?             @relation(fields: [productId], references: [id], onDelete: Cascade)
+  professional ProfessionalProfile? @relation(fields: [professionalId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, productId])
+  @@unique([userId, professionalId])
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("favorites")
+}
+
+// ===========================================================================
+// Professionals & hiring
+// ===========================================================================
+
+enum Availability {
+  NOW
+  SOON
+  FULL
+}
+
+model ProfessionalProfile {
+  id     String @id @default(cuid())
+  userId String @unique
+  slug   String @unique
+
+  title    String
+  field    String
+  bio      String @db.Text
+  location String
+
+  skills String[] @default([])
+
+  /// Typical project range, in cents.
+  rateMinCents Int
+  rateMaxCents Int
+
+  availability Availability @default(NOW)
+  verified     Boolean      @default(false)
+
+  ratingSum      Int @default(0)
+  ratingCount    Int @default(0)
+  projectsCount  Int @default(0)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  portfolio PortfolioItem[]
+  services  Service[]
+  proposals Proposal[]
+  favorites Favorite[]
+
+  @@index([field, availability])
+  @@index([verified, ratingCount])
+  @@map("professional_profiles")
+}
+
+model PortfolioItem {
+  id             String @id @default(cuid())
+  professionalId String
+
+  title       String
+  description String  @db.Text
+  imageKey    String?
+  /// e.g. "3 semanas · R$ 8.400"
+  meta        String
+  position    Int     @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  professional ProfessionalProfile @relation(fields: [professionalId], references: [id], onDelete: Cascade)
+
+  @@index([professionalId, position])
+  @@map("portfolio_items")
+}
+
+model Service {
+  id             String @id @default(cuid())
+  professionalId String
+
+  title       String
+  description String @db.Text
+  fromCents   Int
+  deliveryDays Int
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  professional ProfessionalProfile @relation(fields: [professionalId], references: [id], onDelete: Cascade)
+
+  @@index([professionalId])
+  @@map("services")
+}
+
+enum DemandStatus {
+  OPEN
+  IN_REVIEW
+  AWARDED
+  CLOSED
+  CANCELLED
+}
+
+model Demand {
+  id      String @id @default(cuid())
+  slug    String @unique
+  buyerId String
+
+  title     String
+  problem   String @db.Text
+  goal      String @db.Text
+  details   String @db.Text
+  category  String
+
+  tools String[] @default([])
+
+  budgetMinCents Int
+  budgetMaxCents Int
+  deadlineWeeks  Int
+
+  status DemandStatus @default(OPEN)
+
+  proposalCount Int @default(0)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  buyer     User       @relation(fields: [buyerId], references: [id], onDelete: Cascade)
+  proposals Proposal[]
+
+  @@index([status, createdAt(sort: Desc)])
+  @@index([buyerId, status])
+  @@map("demands")
+}
+
+enum ProposalStatus {
+  SENT
+  ACCEPTED
+  REJECTED
+  WITHDRAWN
+}
+
+model Proposal {
+  id             String @id @default(cuid())
+  demandId       String
+  professionalId String
+  authorId       String
+
+  priceCents    Int
+  deliveryWeeks Int
+  approach      String   @db.Text
+  deliverables  String[] @default([])
+  notes         String?  @db.Text
+
+  status ProposalStatus @default(SENT)
+
+  respondedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  demand       Demand              @relation(fields: [demandId], references: [id], onDelete: Cascade)
+  professional ProfessionalProfile @relation(fields: [professionalId], references: [id], onDelete: Cascade)
+  author       User                @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  // A professional may submit only one proposal per demand.
+  @@unique([demandId, professionalId])
+  @@index([demandId, status])
+  @@index([authorId, status])
+  @@map("proposals")
+}
+
+// ===========================================================================
+// Messaging
+// ===========================================================================
+
+model Conversation {
+  id String @id @default(cuid())
+
+  /// Optional anchor: the demand or product the conversation is about.
+  demandId  String?
+  productId String?
+  subject   String?
+
+  lastMessageAt DateTime @default(now())
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  participants ConversationParticipant[]
+  messages     Message[]
+
+  @@index([lastMessageAt(sort: Desc)])
+  @@map("conversations")
+}
+
+/// Membership is the authorization boundary for a thread: a user can read a
+/// conversation only if a row here links them to it.
+model ConversationParticipant {
+  id             String @id @default(cuid())
+  conversationId String
+  userId         String
+
+  lastReadAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([conversationId, userId])
+  @@index([userId])
+  @@map("conversation_participants")
+}
+
+model Message {
+  id             String @id @default(cuid())
+  conversationId String
+  senderId       String
+
+  body String @db.Text
+
+  createdAt DateTime  @default(now())
+  editedAt  DateTime?
+  deletedAt DateTime?
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender       User         @relation(fields: [senderId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt])
+  @@map("messages")
+}
+
+// ===========================================================================
+// Notifications & audit
+// ===========================================================================
+
+enum NotificationType {
+  PURCHASE_COMPLETED
+  SALE_COMPLETED
+  PROPOSAL_RECEIVED
+  PROPOSAL_ACCEPTED
+  PROPOSAL_REJECTED
+  REVIEW_RECEIVED
+  PRODUCT_APPROVED
+  PRODUCT_REJECTED
+  MESSAGE_RECEIVED
+  PRODUCT_UPDATED
+  PAYOUT_SCHEDULED
+}
+
+model Notification {
+  id     String           @id @default(cuid())
+  userId String
+  type   NotificationType
+
+  title String
+  body  String
+  /// In-app deep link for the notification's primary action.
+  href  String?
+
+  readAt DateTime?
+
+  // Delivery bookkeeping — email and push are future channels; the columns
+  // exist now so enabling them needs no migration.
+  emailSentAt DateTime?
+  pushSentAt  DateTime?
+
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt, createdAt(sort: Desc)])
+  @@map("notifications")
+}
+
+/// Append-only record of privileged and state-changing actions. Never updated
+/// or deleted by application code.
+model AuditLog {
+  id String @id @default(cuid())
+
+  /// Null for system-initiated actions.
+  actorId String?
+
+  action     String
+  entityType String
+  entityId   String
+
+  /// Structured before/after or contextual detail.
+  metadata Json?
+
+  ipHash    String?
+  userAgent String?
+
+  createdAt DateTime @default(now())
+
+  actor User? @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([entityType, entityId, createdAt(sort: Desc)])
+  @@index([actorId, createdAt(sort: Desc)])
+  @@index([action, createdAt(sort: Desc)])
+  @@map("audit_logs")
+}

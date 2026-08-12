@@ -27,6 +27,12 @@ import {
 import { professionalFiltersSchema } from '@/lib/validation/schemas';
 import { formatRange } from '@/lib/money';
 import { resilient } from '@/lib/resilient';
+import { isDatabaseConfigured } from '@/lib/env';
+import {
+  DEMO_PROFESSIONAL_FIELDS,
+  filterDemoProfessionals,
+  type DemoProfessional,
+} from '@/lib/demo-data';
 
 export const metadata: Metadata = {
   title: 'Profissionais',
@@ -179,11 +185,9 @@ export default async function ProfessionalsPage({
 }
 
 async function ProfessionalFilters() {
-  const { data: facets } = await resilient(
-    getProfessionalFacets,
-    [],
-    'professionals.facets'
-  );
+  const facets = isDatabaseConfigured
+    ? (await resilient(getProfessionalFacets, [], 'professionals.facets')).data
+    : DEMO_PROFESSIONAL_FIELDS;
 
   const fieldOptions = [
     { id: 'Todas as áreas', label: 'Todas as áreas' },
@@ -214,6 +218,21 @@ async function Results({
     ? parsed.data
     : professionalFiltersSchema.parse({});
 
+  // No database configured: filter the fictional roster in memory instead of
+  // querying.
+  if (!isDatabaseConfigured) {
+    const listing = filterDemoProfessionals(filters);
+    return (
+      <ResultsView
+        raw={raw}
+        items={listing.items.map(demoToCard)}
+        total={listing.total}
+        page={listing.page}
+        pageCount={listing.pageCount}
+      />
+    );
+  }
+
   const { data: listing, unavailable } = await resilient(
     () => listProfessionals(filters),
     { items: [], total: 0, page: 1, pageCount: 1 },
@@ -229,6 +248,44 @@ async function Results({
     );
   }
 
+  return (
+    <ResultsView raw={raw} items={items} total={total} page={page} pageCount={pageCount} />
+  );
+}
+
+/** Reshapes a demo professional into the same fields the real card reads. */
+function demoToCard(pro: DemoProfessional) {
+  return {
+    id: pro.id,
+    slug: pro.slug,
+    verified: pro.verified,
+    title: pro.title,
+    location: pro.location,
+    bio: pro.bio,
+    skills: pro.skills,
+    availability: pro.availability,
+    ratingSum: pro.ratingSum,
+    ratingCount: pro.ratingCount,
+    projectsCount: pro.projectsCount,
+    rateMinCents: pro.rateMinCents,
+    rateMaxCents: pro.rateMaxCents,
+    user: { name: pro.name },
+  };
+}
+
+function ResultsView({
+  raw,
+  items,
+  total,
+  page,
+  pageCount,
+}: {
+  raw: Record<string, string | string[] | undefined>;
+  items: ReturnType<typeof demoToCard>[];
+  total: number;
+  page: number;
+  pageCount: number;
+}) {
   if (items.length === 0) {
     return (
       <div className="mt-8">

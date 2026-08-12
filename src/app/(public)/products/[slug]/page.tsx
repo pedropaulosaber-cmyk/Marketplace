@@ -8,7 +8,7 @@ import {
   Tag,
   Thumb,
 } from '@/components/ui/primitives';
-import { LinkButton } from '@/components/ui/button';
+import { Button, LinkButton } from '@/components/ui/button';
 import { Markdown } from '@/components/ui/markdown';
 import { ProductCardCompact } from '@/components/marketplace/product-card';
 import { ProductGallery } from '@/components/marketplace/product-gallery';
@@ -32,6 +32,8 @@ import { canReview } from '@/server/services/review-service';
 import { db } from '@/server/db/client';
 import { getSession } from '@/server/auth/session';
 import { formatPrice } from '@/lib/money';
+import { isDatabaseConfigured } from '@/lib/env';
+import { DEMO_PRODUCTS, findDemoProduct, type DemoProduct } from '@/lib/demo-data';
 
 interface PageProps {
   params: Promise<{ slug: string }>;
@@ -47,7 +49,12 @@ export async function generateMetadata({
   params,
 }: PageProps): Promise<Metadata> {
   const { slug } = await params;
-  const product = await getProductBySlug(slug);
+
+  // No database configured: metadata comes from the fictional catalogue
+  // instead of a query that could only fail.
+  const product = isDatabaseConfigured
+    ? await getProductBySlug(slug)
+    : findDemoProduct(slug);
 
   if (!product) {
     return { title: 'Produto não encontrado', robots: { index: false } };
@@ -74,32 +81,16 @@ export async function generateMetadata({
   };
 }
 
-/**
- * Pre-render the best-selling products at build time.
- *
- * Runs during `next build`, unlike the page itself (pushed to on-demand
- * rendering by the session cookie read in the shared layout). If the
- * database is not reachable yet, prerender nothing rather than fail the
- * build — `dynamicParams` defaults to true, so every product still renders
- * correctly on its first real request, just without the build-time head
- * start. The next build picks the static list back up automatically.
- */
-export async function generateStaticParams() {
-  try {
-    const products = await db.product.findMany({
-      where: { status: 'PUBLISHED', deletedAt: null },
-      select: { slug: true },
-      orderBy: { salesCount: 'desc' },
-      take: 50,
-    });
-
-    return products.map((p) => ({ slug: p.slug }));
-  } catch {
-    return [];
-  }
-}
-
-export const revalidate = 600;
+// Forced dynamic rather than ISR (`revalidate`): this page reads
+// `searchParams.ref` on every request to attribute an affiliate click, so a
+// cached page from one visitor's link would silently serve — and fail to
+// attribute — a different visitor's referral code. ISR combined with reading
+// a dynamic API on a fresh (unprerendered) param also produces a
+// DYNAMIC_SERVER_USAGE render failure the moment the database is unreachable
+// and `generateStaticParams` (previously used here) comes back empty — the
+// same class of build/runtime conflict the home page hit for the same reason
+// (see src/app/(public)/page.tsx). Being explicit here avoids both.
+export const dynamic = 'force-dynamic';
 
 const HOW_IT_WORKS = [
   {
@@ -132,6 +123,17 @@ const ASSURANCES = [
 
 export default async function ProductPage({ params, searchParams }: PageProps) {
   const { slug } = await params;
+
+  // No database configured: render straight from the fictional catalogue.
+  // This bypasses every DB- and session-backed call below entirely, rather
+  // than letting each one fail into a caught error — there is nothing to
+  // query yet, so there is nothing to attempt.
+  if (!isDatabaseConfigured) {
+    const demo = findDemoProduct(slug);
+    if (!demo) notFound();
+    return <DemoProductPage product={demo} />;
+  }
+
   const product = await getProductBySlug(slug);
 
   if (!product) notFound();
@@ -492,6 +494,277 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
               {related.map((item) => (
                 <li key={item.id} className="contents">
                   <ProductCardCompact product={item} />
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
+      </Container>
+    </>
+  );
+}
+
+/**
+ * Renders one fictional product without touching the database, the session,
+ * or any server action that would need either. A separate render path rather
+ * than feeding demo data through the real one: the real page's data comes
+ * from a deeply nested Prisma payload (reviews with replies, files, the
+ * author's professional profile), and faking that shape exactly would be far
+ * more fragile than rendering the simpler demo shape on its own terms.
+ */
+function DemoProductPage({ product }: { product: DemoProduct }) {
+  const average =
+    product.ratingCount > 0 ? product.ratingSum / product.ratingCount : null;
+
+  const galleryImages = product.images.map((image, index) => ({
+    id: image.id,
+    // No bytes exist behind this key — ProductGallery falls back to the
+    // styled placeholder on load failure, same as a real product whose
+    // upload has not landed yet.
+    src: `/demo/products/${product.slug}/${index + 1}.png`,
+    alt: image.alt,
+  }));
+
+  const related = DEMO_PRODUCTS.filter(
+    (p) => p.id !== product.id && p.categoryName === product.categoryName
+  ).slice(0, 4);
+
+  return (
+    <>
+      <ProductStructuredData
+        product={{ ...product, author: { name: product.authorName } }}
+        average={average}
+        url={`/products/${product.slug}`}
+      />
+
+      <Container className="py-10 max-sm:py-6">
+        <Breadcrumbs
+          category={product.categoryName}
+          categorySlug={product.categoryName}
+          name={product.name}
+        />
+
+        <div className="mt-6 grid grid-cols-[1fr_360px] gap-14 max-lg:grid-cols-1 max-lg:gap-8">
+          <div>
+            <div className="flex flex-wrap items-center gap-3">
+              <Tag>{product.categoryName}</Tag>
+              {product.tags.map((tag) => (
+                <Tag key={tag} tone="neutral">
+                  {tag}
+                </Tag>
+              ))}
+            </div>
+
+            <h1 className="mt-4 text-[42px] leading-[1.08] font-extrabold max-sm:text-[28px]">
+              {product.name}
+            </h1>
+
+            <p className="mt-4 max-w-[62ch] text-[18px] leading-[1.55] text-[#475569] max-sm:text-[16px]">
+              {product.tagline}
+            </p>
+
+            <div className="mt-6 flex flex-wrap items-center gap-5">
+              <div className="flex items-center gap-[10px]">
+                <Avatar name={product.authorName} size={38} />
+                <span>
+                  <span className="block text-[14px] font-bold text-ink">
+                    {product.authorName}
+                  </span>
+                  <span className="block text-[12.5px] text-muted">
+                    {product.authorProductsCount} produtos publicados
+                  </span>
+                </span>
+              </div>
+
+              {product.authorVerified ? <Tag tone="ok">Criador verificado</Tag> : null}
+
+              <Rating value={average} count={product.ratingCount} className="text-[14px]" />
+            </div>
+
+            <div className="mt-8 flex flex-col gap-5">
+              <ProductGallery images={galleryImages} />
+              {product.videoUrl ? (
+                <ProductVideo url={product.videoUrl} productName={product.name} />
+              ) : null}
+            </div>
+
+            <Section title="Sobre o produto">
+              <Markdown source={product.descriptionMd} />
+            </Section>
+
+            <Section title="Benefícios">
+              <ul className="flex flex-col gap-3">
+                {product.benefits.map((benefit) => (
+                  <li key={benefit} className="flex gap-3 text-[15px] leading-[1.6]">
+                    <CheckIcon />
+                    {benefit}
+                  </li>
+                ))}
+              </ul>
+            </Section>
+
+            <Section title="Como funciona">
+              <ol className="grid grid-cols-2 gap-5 max-sm:grid-cols-1">
+                {HOW_IT_WORKS.map((step) => (
+                  <li
+                    key={step.n}
+                    className="rounded-[14px] border border-line bg-white p-5"
+                  >
+                    <span className="text-[13px] font-extrabold text-blue">
+                      {step.n}
+                    </span>
+                    <p className="mt-2 text-[16px] font-bold">{step.t}</p>
+                    <p className="mt-1 text-[14px] leading-[1.6] text-muted">
+                      {step.b}
+                    </p>
+                  </li>
+                ))}
+              </ol>
+            </Section>
+
+            <Section title="O que está incluído">
+              <ul className="grid grid-cols-2 gap-3 max-sm:grid-cols-1">
+                {product.included.map((item) => (
+                  <li key={item} className="flex gap-3 text-[14.5px] leading-[1.6]">
+                    <CheckIcon />
+                    {item}
+                  </li>
+                ))}
+              </ul>
+            </Section>
+
+            <div className="mt-10 grid grid-cols-2 gap-6 max-sm:grid-cols-1">
+              <div>
+                <h3 className="text-[17px] font-extrabold">Integrações</h3>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {product.integrations.map((item) => (
+                    <Tag key={item} tone="neutral">
+                      {item}
+                    </Tag>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <h3 className="text-[17px] font-extrabold">Compatibilidade</h3>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {product.compat.map((item) => (
+                    <Tag key={item} tone="neutral">
+                      {item}
+                    </Tag>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <Section title="Requisitos">
+              <ul className="flex flex-col gap-3">
+                {product.requirements.map((item) => (
+                  <li key={item} className="flex gap-3 text-[14.5px] leading-[1.6]">
+                    <span aria-hidden="true" className="text-muted">
+                      •
+                    </span>
+                    {item}
+                  </li>
+                ))}
+              </ul>
+            </Section>
+
+            <Section title={`Avaliações (${product.ratingCount})`}>
+              {product.reviews.length === 0 ? (
+                <p className="rounded-[14px] border border-dashed border-line bg-bg px-6 py-10 text-center text-[14.5px] text-muted">
+                  Este produto ainda não tem avaliações. Só quem comprou pode
+                  avaliar.
+                </p>
+              ) : (
+                <ul className="flex flex-col gap-5">
+                  {product.reviews.map((review) => (
+                    <li
+                      key={review.id}
+                      className="rounded-[14px] border border-line bg-white p-5"
+                    >
+                      <div className="flex items-center gap-3">
+                        <Avatar name={review.authorName} size={34} />
+                        <div className="flex-1">
+                          <p className="text-[14px] font-bold">{review.authorName}</p>
+                          {review.authorHeadline ? (
+                            <p className="text-[12.5px] text-muted">
+                              {review.authorHeadline}
+                            </p>
+                          ) : null}
+                        </div>
+                        <span className="text-[13px] text-star" aria-hidden="true">
+                          {'★'.repeat(review.rating)}
+                          <span className="text-line">
+                            {'★'.repeat(5 - review.rating)}
+                          </span>
+                        </span>
+                        <span className="sr-only">{review.rating} de 5 estrelas</span>
+                      </div>
+
+                      <p className="mt-3 text-[14.5px] leading-[1.65]">{review.comment}</p>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Section>
+          </div>
+
+          {/* --- Purchase panel --- */}
+          <aside className="max-lg:order-first">
+            <div className="sticky top-[100px] rounded-[14px] border border-line bg-white p-6 shadow-[0_12px_28px_rgb(15_23_42/0.06)]">
+              <p className="text-[34px] leading-none font-extrabold">
+                {formatPrice(product.priceCents)}
+              </p>
+              <p className="mt-2 text-[13px] leading-[1.5] text-muted">
+                {product.priceCents === 0
+                  ? 'Versão gratuita. Upgrade disponível dentro do produto.'
+                  : 'Pagamento único · 90 dias de suporte do criador incluídos'}
+              </p>
+
+              <div className="mt-5 flex flex-col gap-3">
+                <Button disabled fullWidth size="lg">
+                  Comprar
+                </Button>
+                <p className="text-[12px] leading-[1.5] text-muted">
+                  Produto de demonstração — a compra fica disponível quando o
+                  banco de dados for conectado.
+                </p>
+              </div>
+
+              <ul className="mt-6 flex flex-col gap-[10px] border-t border-line pt-5">
+                {ASSURANCES.map((item) => (
+                  <li
+                    key={item}
+                    className="flex gap-[10px] text-[13px] leading-[1.5] text-[#475569]"
+                  >
+                    <CheckIcon />
+                    {item}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </aside>
+        </div>
+
+        {related.length > 0 ? (
+          <section className="mt-20 max-sm:mt-12">
+            <h2 className="text-[26px] font-extrabold">Produtos relacionados</h2>
+            <ul className="no-scrollbar mt-6 flex gap-4 overflow-x-auto pb-2">
+              {related.map((item) => (
+                <li key={item.id} className="contents">
+                  <ProductCardCompact
+                    product={{
+                      id: item.id,
+                      slug: item.slug,
+                      name: item.name,
+                      tagline: item.tagline,
+                      priceCents: item.priceCents,
+                      ratingSum: item.ratingSum,
+                      ratingCount: item.ratingCount,
+                      category: { name: item.categoryName },
+                      author: { name: item.authorName },
+                    }}
+                  />
                 </li>
               ))}
             </ul>

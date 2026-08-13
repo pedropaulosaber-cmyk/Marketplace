@@ -38,12 +38,19 @@ export async function loginAction(
 ): Promise<ActionResult<null>> {
   const raw = formToObject(formData);
 
-  const result = await action(loginSchema, raw, async (input) => {
-    await authService.login(input);
-    return null;
-  });
+  const result = await action(loginSchema, raw, async (input) =>
+    authService.login(input)
+  );
 
   if (result.ok) {
+    // With a second factor pending, the password step has produced a
+    // challenge and no session. Carrying `next` through the redirect keeps
+    // the original destination without ever putting it in a cookie.
+    if (result.data.requiresTwoFactor) {
+      const next = safeRedirect(raw.next, '/dashboard');
+      redirect(`/login/two-factor?next=${encodeURIComponent(next)}`);
+    }
+
     redirect(safeRedirect(raw.next, '/dashboard'));
   }
 

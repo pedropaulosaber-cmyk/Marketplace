@@ -197,7 +197,7 @@ describe('login', () => {
     // credential-stuffing run across many addresses, which is exactly the case
     // the per-account lockout exists to cover.
     for (let attempt = 0; attempt < 10; attempt += 1) {
-      __resetRateLimits();
+      await __resetRateLimits();
       await login({ email: user.email, password: 'errada-de-proposito' }).catch(
         () => undefined
       );
@@ -212,7 +212,7 @@ describe('login', () => {
     expect(locked.lockedUntil).not.toBeNull();
 
     // Even the correct password is refused while the lock holds.
-    __resetRateLimits();
+    await __resetRateLimits();
     await expect(
       login({ email: user.email, password: TEST_PASSWORD })
     ).rejects.toThrow();

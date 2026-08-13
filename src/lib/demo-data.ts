@@ -1012,3 +1012,163 @@ export function filterDemoDemands(page: number, category?: string): DemoDemandLi
     pageCount,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Partner companies and founding creators.
+//
+// Both reference the existing fictional catalogue by product slug / author
+// name rather than inventing a second roster — the same "one fictional
+// world" reasoning as the rest of this file. A partner company's storefront
+// and a founder's showcase are framings over products that already exist,
+// exactly like `companyId` is an *additional*, optional attribution on a
+// real `Product` rather than a replacement for its author.
+// ---------------------------------------------------------------------------
+
+export interface DemoCompany {
+  id: string;
+  slug: string;
+  name: string;
+  tagline: string;
+  descriptionMd: string;
+  website: string | null;
+  location: string | null;
+  featured: boolean;
+  productSlugs: string[];
+}
+
+export const DEMO_COMPANIES: DemoCompany[] = [
+  {
+    id: 'demo-co-techflow',
+    slug: 'techflow-automacao',
+    name: 'TechFlow Automação',
+    tagline: 'Automações de produtividade para times que não param de crescer.',
+    descriptionMd:
+      '## Quem é a TechFlow\n\nEstúdio de automação focado em times de operações e conteúdo que precisam manter ritmo sem contratar na mesma proporção que crescem.\n\n## Por que parceira\n\nOs produtos abaixo passaram pela mesma verificação de qualidade de qualquer criador da Automatize — a diferença é só o destaque editorial de parceiro.',
+    website: 'https://techflow.example.com',
+    location: 'São Paulo, SP',
+    featured: true,
+    productSlugs: ['meeting-notes-automation', 'ai-content-engine'],
+  },
+  {
+    id: 'demo-co-vetor',
+    slug: 'vetor-vendas',
+    name: 'Vetor Vendas',
+    tagline: 'Automação comercial de ponta a ponta, do lead à proposta.',
+    descriptionMd:
+      '## Quem é a Vetor\n\nConstrói automações comerciais para times que já usam CRM mas ainda perdem tempo com trabalho manual entre a captação e a qualificação do lead.\n\n## Por que parceira\n\nFoco exclusivo em vendas B2B — cada produto nasce de um processo comercial real, testado internamente antes de publicado.',
+    website: 'https://vetorvendas.example.com',
+    location: 'Belo Horizonte, MG',
+    featured: true,
+    productSlugs: ['ai-sales-agent', 'lead-qualification-workflow'],
+  },
+  {
+    id: 'demo-co-orbita',
+    slug: 'orbita-cx',
+    name: 'Órbita CX',
+    tagline: 'Atendimento automatizado sem perder o tom da sua marca.',
+    descriptionMd:
+      '## Quem é a Órbita\n\nEspecialista em automação de atendimento — o primeiro contato fica com a IA, o time humano entra só quando o caso realmente exige.\n\n## Por que parceira\n\nCada fluxo é desenhado para reduzir tempo de primeira resposta sem soar robótico.',
+    website: 'https://orbitacx.example.com',
+    location: 'Curitiba, PR',
+    featured: false,
+    productSlugs: ['whatsapp-support-agent'],
+  },
+  {
+    id: 'demo-co-legalis',
+    slug: 'legalis-ai',
+    name: 'Legalis AI',
+    tagline: 'Automação para times jurídicos e de compliance.',
+    descriptionMd:
+      '## Quem é a Legalis\n\nConstrói automações para revisão contratual e conformidade — um nicho que exige precisão maior do que a maioria das automações de negócio.\n\n## Por que parceira\n\nCada produto é revisado por advogado antes de publicado, além da moderação padrão da Automatize.',
+    website: 'https://legalis.example.com',
+    location: 'Rio de Janeiro, RJ',
+    featured: false,
+    productSlugs: ['contract-review-agent'],
+  },
+  {
+    id: 'demo-co-dataloop',
+    slug: 'dataloop-insights',
+    name: 'Dataloop Insights',
+    tagline: 'Dados operacionais organizados sem depender de analista dedicado.',
+    descriptionMd:
+      '## Quem é a Dataloop\n\nTransforma dado operacional disperso em relatório e alerta acionável, para times que ainda não têm um analista de dados dedicado.\n\n## Por que parceira\n\nProdutos nascidos de projetos de consultoria real, depois generalizados para o catálogo.',
+    website: 'https://dataloopinsights.example.com',
+    location: 'Porto Alegre, RS',
+    featured: false,
+    productSlugs: ['churn-prediction-workflow', 'ops-report-template'],
+  },
+];
+
+export function listDemoCompanies(): DemoCompany[] {
+  return [...DEMO_COMPANIES].sort(
+    (a, b) => Number(b.featured) - Number(a.featured) || a.name.localeCompare(b.name)
+  );
+}
+
+export function findDemoCompany(slug: string): DemoCompany | undefined {
+  return DEMO_COMPANIES.find((c) => c.slug === slug);
+}
+
+/** Products attributed to a demo company, resolved against the shared catalogue. */
+export function demoCompanyProducts(company: DemoCompany): DemoProduct[] {
+  return company.productSlugs
+    .map((slug) => findDemoProduct(slug))
+    .filter((p): p is DemoProduct => Boolean(p));
+}
+
+export interface DemoFounder {
+  id: string;
+  slug: string;
+  name: string;
+  headline: string;
+  bio: string;
+}
+
+/**
+ * `name` matches an existing `DemoProduct.authorName` on purpose —
+ * `demoFounderProducts` resolves a founder's showcase from it, the same way
+ * the real query joins `Profile.isFoundingCreator` through to `User.products`.
+ */
+export const DEMO_FOUNDERS: DemoFounder[] = [
+  {
+    id: 'demo-founder-ana',
+    slug: 'ana-vasques',
+    name: 'Ana Vasques',
+    headline: 'Cofundadora · Automações de conteúdo e operações',
+    bio: 'Publicou o primeiro produto da Automatize ainda na fase fechada e hoje é a criadora com mais vendas do catálogo. Constrói automações para times de conteúdo e operações que precisam manter ritmo sem crescer o time na mesma proporção.',
+  },
+  {
+    id: 'demo-founder-lucas',
+    slug: 'lucas-martins',
+    name: 'Lucas Martins',
+    headline: 'Cofundador · Agentes de IA para vendas',
+    bio: 'Um dos primeiros criadores a publicar na plataforma. Especialista em agentes de qualificação e triagem — o AI Sales Agent nasceu de um processo que ele mesmo rodava manualmente antes de automatizar.',
+  },
+  {
+    id: 'demo-founder-marina',
+    slug: 'marina-duarte',
+    name: 'Marina Duarte',
+    headline: 'Criadora fundadora · Atendimento automatizado',
+    bio: 'Entrou no início do projeto trazendo experiência de operação de CS para o catálogo. Foca em automações de atendimento que reduzem tempo de resposta sem perder o tom da marca do cliente.',
+  },
+  {
+    id: 'demo-founder-diego',
+    slug: 'diego-salles',
+    name: 'Diego Salles',
+    headline: 'Criador fundador · Automação jurídica',
+    bio: 'Trouxe para o catálogo, desde o primeiro mês, automações voltadas a times jurídicos e de compliance — um nicho que a maioria dos marketplaces de IA ainda não atende bem.',
+  },
+];
+
+export function listDemoFounders(): DemoFounder[] {
+  return DEMO_FOUNDERS;
+}
+
+export function findDemoFounder(slug: string): DemoFounder | undefined {
+  return DEMO_FOUNDERS.find((f) => f.slug === slug);
+}
+
+/** A founder's products, resolved against the shared catalogue by author name. */
+export function demoFounderProducts(founder: DemoFounder): DemoProduct[] {
+  return DEMO_PRODUCTS.filter((p) => p.authorName === founder.name).slice(0, 3);
+}

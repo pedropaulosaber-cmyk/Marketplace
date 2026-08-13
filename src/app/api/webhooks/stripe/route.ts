@@ -7,6 +7,7 @@ import { reverseCommissionsForOrder } from '@/server/services/affiliate-service'
 import { audit } from '@/server/security/audit';
 import { isPaymentsConfigured } from '@/lib/env';
 import { log, securityLog } from '@/lib/logger';
+import { captureError } from '@/lib/monitoring';
 
 const logger = log('stripe-webhook');
 
@@ -79,6 +80,7 @@ export async function POST(request: Request): Promise<NextResponse> {
       { err: error, eventId: event.id, type: event.type },
       'webhook handling failed'
     );
+    captureError(error, { eventId: event.id, type: event.type });
     // A 500 tells Stripe to retry. Because handling is idempotent, retrying is
     // safe and is what we want for a transient database failure.
     return NextResponse.json({ error: 'handler failed' }, { status: 500 });

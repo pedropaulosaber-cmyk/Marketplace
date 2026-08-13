@@ -84,6 +84,11 @@ const envSchema = z
     LOG_LEVEL: z
       .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace'])
       .default('info'),
+
+    // --- Error reporting ---------------------------------------------------
+    // Optional, like STRIPE_SECRET_KEY above: absent means captureError()
+    // never even imports the SDK, rather than initializing it against nothing.
+    SENTRY_DSN: z.string().url().optional().or(z.literal('')),
   })
   // If the S3 driver is selected, its credentials become mandatory. Catching
   // this at boot avoids a runtime failure on the first customer download.
@@ -234,6 +239,9 @@ export const isSessionConfigured = Boolean(process.env.SESSION_SECRET);
 export const isPaymentsConfigured = Boolean(
   env.STRIPE_SECRET_KEY && env.STRIPE_WEBHOOK_SECRET
 );
+
+/** True once a Sentry DSN is configured. `captureError()` is a no-op without it. */
+export const isMonitoringConfigured = Boolean(env.SENTRY_DSN);
 
 export const isProduction = env.NODE_ENV === 'production';
 export const isTest = env.NODE_ENV === 'test';

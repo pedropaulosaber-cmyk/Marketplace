@@ -14,6 +14,7 @@ const COLUMNS = [
       { label: 'Categorias', href: '/products' },
       { label: 'Mais vendidos', href: '/products?sort=sold' },
       { label: 'Novidades', href: '/products?sort=new' },
+      { label: 'Empresas parceiras', href: '/companies' },
     ],
   },
   {
@@ -30,12 +31,13 @@ const COLUMNS = [
       { label: 'Vender produtos', href: '/sell' },
       { label: 'Dashboard', href: '/dashboard' },
       { label: 'Central do criador', href: '/dashboard/products' },
+      { label: 'Criadores fundadores', href: '/founders' },
     ],
   },
   {
     title: 'Empresa',
     links: [
-      { label: 'Sobre', href: '/sell' },
+      { label: 'Sobre', href: '/about' },
       { label: 'Contato', href: '/sell' },
       { label: 'Segurança', href: '/sell' },
       { label: 'Termos', href: '/sell' },

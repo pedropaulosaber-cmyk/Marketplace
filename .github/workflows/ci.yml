@@ -65,6 +65,14 @@ jobs:
       # what ships.
       - run: pnpm install --frozen-lockfile
 
+      # `@prisma/client` ships as an unbuilt stub until this runs — a plain
+      # install does not generate it. Every type import from "@prisma/client"
+      # (PrismaClient, Role, every model type) resolves to nothing without
+      # this step, which typecheck below would report as hundreds of
+      # unrelated-looking "no exported member" errors instead of the one
+      # real cause.
+      - run: pnpm prisma generate
+
       - run: pnpm prisma migrate deploy
 
       - run: pnpm typecheck

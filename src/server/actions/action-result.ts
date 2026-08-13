@@ -2,6 +2,7 @@ import 'server-only';
 import { ZodError, type z } from 'zod';
 import { isAppError, toUserMessage } from '@/lib/errors';
 import { log } from '@/lib/logger';
+import { captureError } from '@/lib/monitoring';
 
 const logger = log('actions');
 
@@ -68,6 +69,7 @@ export async function action<TSchema extends z.ZodTypeAny, TResult>(
     }
 
     logger.error({ err: error }, 'unhandled action error');
+    captureError(error);
     return fail(toUserMessage(error));
   }
 }
@@ -84,6 +86,7 @@ export async function simpleAction<TResult>(
       return fail(error.message, error.fields);
     }
     logger.error({ err: error }, 'unhandled action error');
+    captureError(error);
     return fail(toUserMessage(error));
   }
 }

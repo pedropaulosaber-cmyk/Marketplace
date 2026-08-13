@@ -161,6 +161,13 @@ nem apaga essas linhas.
 Redação de segredos é **central**, no logger. Um ponto de log que precisa
 lembrar de remover uma senha é um ponto de log que uma hora vai esquecer.
 
+Captura de erro (Sentry) é **opcional e desligada por padrão** — sem
+`SENTRY_DSN`, `captureError()` nem chega a importar o SDK, então não há custo
+nenhum enquanto não for configurado. Uma vez ligado, cobre o ponto central de
+falha de toda Server Action (`action()`/`simpleAction()`) e o handler do
+webhook do Stripe. Só roda em servidor e edge — sem SDK de navegador, então
+nenhuma chamada sai do navegador do visitante e o CSP não precisou mudar.
+
 ## Checklist para todo recurso novo
 
 Antes de abrir PR de qualquer tela, ação ou rota nova:

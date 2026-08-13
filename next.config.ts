@@ -47,6 +47,13 @@ const nextConfig: NextConfig = {
   typescript: { ignoreBuildErrors: false },
   eslint: { ignoreDuringBuilds: false },
 
+  // Sentry's Node SDK pulls in OpenTelemetry's auto-instrumentation, which
+  // hooks `require()` at runtime in a way webpack cannot statically analyze.
+  // Left bundled, that produces a "Critical dependency" warning on every
+  // build; required from node_modules at runtime instead, same as any other
+  // server-only package, it does not.
+  serverExternalPackages: ['@sentry/nextjs', '@opentelemetry/instrumentation'],
+
   experimental: {
     serverActions: {
       // Uploads go straight to object storage through a signed URL, so no

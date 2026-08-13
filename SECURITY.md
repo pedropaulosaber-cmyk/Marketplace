@@ -60,9 +60,34 @@ Esses cabeçalhos são verificados por teste (`tests/security-headers.test.ts`).
 Afrouxar a política exige editar um teste que falha — não acontece por
 descuido.
 
+### Banco de dados
+
+- **RLS deny-all em todas as tabelas**, mais grants revogados para os papéis
+  `anon` e `authenticated` — inclusive nos privilégios padrão, para que uma
+  tabela criada depois não nasça exposta.
+- Por que isso importa: a aplicação fala com o Postgres só via Prisma, em
+  conexão direta. Mas a chave publicável do Supabase chega ao banco pelo
+  PostgREST como `anon`, e por padrão esse papel lia e escrevia em **todas** as
+  tabelas — usuários, sessões, pedidos, repasses. Uma chave publicável vazada
+  era vazamento total.
+- Verificado antes de aplicar (o papel do Prisma tem `BYPASSRLS`) e depois,
+  assumindo o papel `anon` e tentando ler `categories`, `users`, `orders` e
+  `sessions`: as quatro retornam `insufficient_privilege`.
+
 ### Identidade e sessão
 
 - Senhas com **Argon2id**. Nunca texto puro, nunca codificação reversível.
+- **Verificação em duas etapas (TOTP)**, compatível com qualquer app
+  autenticador. O segredo é guardado cifrado com AES-256-GCM — diferente de
+  senha, ele precisa ser reproduzível a cada verificação, então é o único
+  segredo em que um vazamento do banco sozinho ainda não basta.
+- Com 2FA ativo, a senha correta **não cria sessão**: gera um desafio de curta
+  duração, consumível uma única vez. Senha roubada leva o atacante até a tela
+  do código e não passa disso.
+- Códigos de recuperação de uso único, exibidos uma só vez e guardados como
+  fingerprint HMAC.
+- Comparação de código em tempo constante — comparação rápida vazaria, pelo
+  tempo, quantos dígitos iniciais estavam certos.
 - Sessões são **tokens opacos aleatórios**; o banco guarda só o *fingerprint*
   HMAC. Um vazamento do banco não permite replay de sessão.
 - Cookie `__Host-` em produção: `HttpOnly`, `Secure`, `SameSite=Lax`,
@@ -155,19 +180,41 @@ Antes de abrir PR de qualquer tela, ação ou rota nova:
       e o teste de cabeçalhos foi atualizado junto.
 - [ ] Se precisou de segredo novo, ele entrou na redação do logger.
 
+### Automação de esteira
+
+CI roda em todo push e PR, e semanalmente por conta própria (para que um
+advisory publicado contra uma dependência já em uso apareça sozinho):
+
+- Tipos, lint, testes e build, contra um Postgres real e com o mesmo driver de
+  rate limit que a produção usa.
+- `pnpm audit` falhando em qualquer advisory *moderate* ou pior.
+- **Gitleaks** com histórico completo — uma chave commitada e removida depois
+  continua publicada; varrer só o topo perderia justamente esse caso.
+- **CodeQL** com a suíte `security-and-quality`.
+
 ## Pendências conhecidas
 
 Registradas por honestidade, não como conquistas:
 
-- **RLS no Supabase está desabilitado.** Hoje o acesso é sempre pela
-  aplicação, que impõe autorização — mas RLS seria a rede de proteção caso uma
-  chave vazasse. Deve ser ligado antes de qualquer acesso direto ao banco a
-  partir do cliente.
-- **2FA ainda não existe.** O schema já suporta revogação total de sessões,
-  que é a peça que falta ser exercitada por um segundo fator.
-- **Sem varredura automática de dependência e segredo em CI.**
-- **Rate limit em memória** por padrão: só funciona por instância. Com mais de
-  uma instância, precisa do driver compartilhado.
+- **Repositório é público.** Todo o código-fonte está legível por qualquer
+  pessoa. Isso não é falha de segurança por si só — a segurança aqui não
+  depende de obscuridade, e nenhum segredo está versionado — mas é uma decisão
+  de negócio a tomar conscientemente, não por inércia.
+- **Sem UI de gerenciamento de sessões.** A revogação já existe na camada de
+  serviço (`revokeAllSessions`, mais `revokedAt` por sessão), mas ninguém
+  consegue ver os próprios dispositivos ativos nem encerrar um deles pela
+  interface. Detecção e recuperação valem tanto quanto prevenção.
+- **Sem alerta de novo login.** Um acesso de dispositivo desconhecido não
+  notifica o dono da conta.
+- **Rate limit falha aberto** quando o banco está inacessível. É deliberado e
+  documentado no código: toda ação por trás do limitador precisa do mesmo
+  banco para fazer qualquer coisa útil. Vale reavaliar se algum dia existir
+  ação sensível que não dependa do banco.
+- **Recuperação de 2FA depende de suporte humano.** Sem os códigos de
+  recuperação, reaver a conta exige verificação de identidade — e esse
+  processo ainda não está escrito.
+- **Sem WAF / proteção de borda dedicada.** Rate limit é da aplicação; um
+  ataque volumétrico distribuído precisa ser barrado antes de chegar aqui.
 
 ## Reportando uma vulnerabilidade
 

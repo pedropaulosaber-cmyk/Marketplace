@@ -1,0 +1,132 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    # Weekly, so an advisory published against a dependency we already ship
+    # surfaces on its own rather than waiting for the next unrelated commit.
+    - cron: '0 6 * * 1'
+
+# A newer push makes an in-flight run irrelevant; cancelling frees the runner
+# instead of paying for a result nobody will read.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# Least privilege by default. Jobs that need more request it explicitly.
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Types, lint and tests
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: automatize
+          POSTGRES_PASSWORD: automatize
+          POSTGRES_DB: automatize_test
+        ports: ['5432:5432']
+        # Without a health check the steps race the container's startup and
+        # fail intermittently, which is worse than failing consistently.
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql://automatize:automatize@localhost:5432/automatize_test?schema=public
+      SESSION_SECRET: ci-session-secret-value-at-least-32-characters-long
+      APP_URL: http://localhost:3000
+      NEXT_PUBLIC_APP_URL: http://localhost:3000
+      # Exercise the driver production runs, not the in-memory shortcut.
+      RATE_LIMIT_DRIVER: database
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      # --frozen-lockfile: CI must build what the lockfile pins. Silently
+      # resolving a different tree would mean testing something other than
+      # what ships.
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm prisma migrate deploy
+
+      - run: pnpm typecheck
+      - run: pnpm lint
+      - run: pnpm test
+      - run: pnpm build
+
+  audit:
+    name: Dependency advisories
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # Fails the build on anything moderate or worse. Advisories that are
+      # only reachable in dev tooling still get fixed — an advisory left
+      # standing is one nobody reads the next time.
+      - run: pnpm audit --audit-level=moderate
+
+  secrets:
+    name: Secret scanning
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history: a key committed and then removed in a later commit is
+          # still published. Scanning only the tip would miss exactly the case
+          # that matters.
+          fetch-depth: 0
+
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  codeql:
+    name: Static analysis
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      security-events: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: github/codeql-action/init@v3
+        with:
+          languages: javascript-typescript
+          # The security-and-quality suite includes the injection and
+          # data-flow queries that matter for a payments application.
+          queries: security-and-quality
+
+      - uses: github/codeql-action/analyze@v3

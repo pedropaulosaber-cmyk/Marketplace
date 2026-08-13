@@ -20,8 +20,11 @@ import type { SessionUser } from '@/server/auth/session';
 const NAV = [
   { href: '/products', label: 'Produtos' },
   { href: '/professionals', label: 'Profissionais' },
+  { href: '/companies', label: 'Empresas' },
   { href: '/demands', label: 'Demandas' },
   { href: '/sell', label: 'Vender' },
+  { href: '/founders', label: 'Fundadores' },
+  { href: '/about', label: 'Quem somos' },
 ] as const;
 
 export function SiteHeader({ user }: { user: SessionUser | null }) {
@@ -57,17 +60,17 @@ export function SiteHeader({ user }: { user: SessionUser | null }) {
 
   return (
     <header className="sticky top-0 z-60 border-b border-line bg-white/93 backdrop-blur-[10px]">
-      <div className="mx-auto flex w-full max-w-[1280px] items-center gap-8 px-20 py-[18px] max-lg:gap-5 max-lg:px-10 max-sm:px-5 max-sm:py-3">
+      <div className="mx-auto flex w-full max-w-[1280px] items-center gap-6 px-14 py-[18px] max-lg:gap-5 max-lg:px-10 max-sm:px-5 max-sm:py-3">
         <Logo className="mr-auto" />
 
-        <nav aria-label="Principal" className="flex items-center gap-8 max-lg:hidden">
+        <nav aria-label="Principal" className="flex items-center gap-4 max-lg:hidden xl:gap-6">
           {NAV.map((item) => (
             <Link
               key={item.href}
               href={item.href}
               aria-current={isActive(item.href) ? 'page' : undefined}
               className={cn(
-                'border-b-2 py-2 text-[14.5px] no-underline transition-colors',
+                'border-b-2 py-2 text-[13.5px] whitespace-nowrap no-underline transition-colors xl:text-[14.5px]',
                 isActive(item.href)
                   ? 'border-blue font-bold text-blue-700'
                   : 'border-transparent font-medium text-[#334155] hover:text-blue-700'

@@ -43,7 +43,8 @@ export async function resetDatabase(): Promise<void> {
       professional_profiles, favorites, review_replies, reviews,
       download_logs, payouts, processed_webhook_events, payments,
       order_items, orders, product_tags, product_files, product_images,
-      products, tags, categories, sessions, user_roles, profiles, users
+      products, companies, tags, categories, sessions, user_roles, profiles,
+      users
     RESTART IDENTITY CASCADE
   `);
 
@@ -84,6 +85,24 @@ export async function createCategory(name = 'AI Agents'): Promise<string> {
     select: { id: true },
   });
   return category.id;
+}
+
+export async function createCompany(options?: {
+  featured?: boolean;
+  name?: string;
+}): Promise<{ id: string; slug: string }> {
+  const slug = unique('empresa');
+  const company = await db.company.create({
+    data: {
+      slug,
+      name: options?.name ?? 'Empresa de Teste',
+      tagline: 'Automação de teste para o time inteiro.',
+      descriptionMd: 'Descrição de teste longa o suficiente para renderizar.',
+      featured: options?.featured ?? false,
+    },
+    select: { id: true, slug: true },
+  });
+  return company;
 }
 
 export async function createProduct(options: {

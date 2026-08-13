@@ -118,6 +118,9 @@ model Profile {
   company   String?
   website   String?
   location  String?
+  /// Editorial flag for a creator who joined in the earliest days — set by
+  /// an operator, never self-declared. Drives the public "founders" page.
+  isFoundingCreator Boolean @default(false)
   // BCP-47 locale, e.g. pt-BR
   locale    String  @default("pt-BR")
 
@@ -203,6 +206,10 @@ model Product {
 
   categoryId String
   authorId   String
+  /// Optional: set only for a product published under a partner company's
+  /// storefront, in addition to its individual author. Most products have no
+  /// company and this stays null.
+  companyId  String?
 
   /// Price in integer cents (BRL). 0 means a free product.
   priceCents Int    @default(0)
@@ -238,6 +245,7 @@ model Product {
 
   category   Category      @relation(fields: [categoryId], references: [id])
   author     User          @relation(fields: [authorId], references: [id])
+  company    Company?      @relation(fields: [companyId], references: [id])
   images     ProductImage[]
   files      ProductFile[]
   tags       ProductTag[]
@@ -254,7 +262,35 @@ model Product {
   @@index([authorId, status])
   @@index([status, priceCents])
   @@index([status, salesCount(sort: Desc)])
+  @@index([companyId])
   @@map("products")
+}
+
+/// Partner companies with a curated storefront — editorially featured, not
+/// self-registered. A product keeps its individual `author`; `companyId` is
+/// an additional, optional attribution for one published under a partner's
+/// banner.
+model Company {
+  id            String  @id @default(cuid())
+  slug          String  @unique
+  name          String
+  tagline       String
+  descriptionMd String  @db.Text
+  logoKey       String?
+  website       String?
+  location      String?
+  /// Featured partners get top placement on the listing; this is an
+  /// editorial flag, never something a company sets on itself.
+  featured      Boolean @default(false)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  products Product[]
+
+  @@index([featured])
+  @@map("companies")
 }
 
 model ProductTag {

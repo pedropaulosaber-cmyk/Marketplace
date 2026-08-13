@@ -333,6 +333,84 @@ const PRODUCTS = [
   },
 ] as const;
 
+/**
+ * Founding creators — the small set of accounts flagged
+ * `Profile.isFoundingCreator`, drives the public `/founders` page. Chosen
+ * from among the earliest and most established seeded creators; matches the
+ * fictional roster used in `src/lib/demo-data.ts` so the founders page reads
+ * the same whether or not a database is configured.
+ */
+const FOUNDING_CREATOR_EMAILS = [
+  'ana@automatize.dev',
+  'lucas@automatize.dev',
+  'marina@automatize.dev',
+  'diego@automatize.dev',
+] as const;
+
+/**
+ * Partner companies with a curated storefront. `productSlugs` connects
+ * existing products by slug — see `Company` in schema.prisma: this is an
+ * *additional* attribution alongside each product's individual author, not
+ * a replacement for it.
+ */
+const COMPANIES = [
+  {
+    slug: 'techflow-automacao',
+    name: 'TechFlow Automação',
+    tagline: 'Automações de produtividade para times que não param de crescer.',
+    descriptionMd:
+      '## Quem é a TechFlow\n\nEstúdio de automação focado em times de operações e conteúdo que precisam manter ritmo sem contratar na mesma proporção que crescem.\n\n## Por que parceira\n\nOs produtos abaixo passaram pela mesma verificação de qualidade de qualquer criador da Automatize — a diferença é só o destaque editorial de parceiro.',
+    website: 'https://techflow.example.com',
+    location: 'São Paulo, SP',
+    featured: true,
+    productSlugs: ['meeting-notes-automation', 'ai-content-engine', 'seo-product-copy-batch'],
+  },
+  {
+    slug: 'vetor-vendas',
+    name: 'Vetor Vendas',
+    tagline: 'Automação comercial de ponta a ponta, do lead à proposta.',
+    descriptionMd:
+      '## Quem é a Vetor\n\nConstrói automações comerciais para times que já usam CRM mas ainda perdem tempo com trabalho manual entre a captação e a qualificação do lead.\n\n## Por que parceira\n\nFoco exclusivo em vendas B2B — cada produto nasce de um processo comercial real, testado internamente antes de publicado.',
+    website: 'https://vetorvendas.example.com',
+    location: 'Belo Horizonte, MG',
+    featured: true,
+    productSlugs: ['ai-sales-agent', 'lead-qualification-workflow', 'gerador-de-propostas-comerciais'],
+  },
+  {
+    slug: 'orbita-cx',
+    name: 'Órbita CX',
+    tagline: 'Atendimento automatizado sem perder o tom da sua marca.',
+    descriptionMd:
+      '## Quem é a Órbita\n\nEspecialista em automação de atendimento — o primeiro contato fica com a IA, o time humano entra só quando o caso realmente exige.\n\n## Por que parceira\n\nCada fluxo é desenhado para reduzir tempo de primeira resposta sem soar robótico.',
+    website: 'https://orbitacx.example.com',
+    location: 'Curitiba, PR',
+    featured: false,
+    productSlugs: ['whatsapp-support-agent', 'chatbot-de-agendamento-medico'],
+  },
+  {
+    slug: 'legalis-ai',
+    name: 'Legalis AI',
+    tagline: 'Automação para times jurídicos e de compliance.',
+    descriptionMd:
+      '## Quem é a Legalis\n\nConstrói automações para revisão contratual e conformidade — um nicho que exige precisão maior do que a maioria das automações de negócio.\n\n## Por que parceira\n\nCada produto é revisado por advogado antes de publicado, além da moderação padrão da Automatize.',
+    website: 'https://legalis.example.com',
+    location: 'Rio de Janeiro, RJ',
+    featured: false,
+    productSlugs: ['contract-review-agent', 'prompt-pack-juridico'],
+  },
+  {
+    slug: 'dataloop-insights',
+    name: 'Dataloop Insights',
+    tagline: 'Dados operacionais organizados sem depender de analista dedicado.',
+    descriptionMd:
+      '## Quem é a Dataloop\n\nTransforma dado operacional disperso em relatório e alerta acionável, para times que ainda não têm um analista de dados dedicado.\n\n## Por que parceira\n\nProdutos nascidos de projetos de consultoria real, depois generalizados para o catálogo.',
+    website: 'https://dataloopinsights.example.com',
+    location: 'Porto Alegre, RS',
+    featured: false,
+    productSlugs: ['churn-prediction-workflow', 'ops-report-template', 'auditor-de-qualidade-de-dados'],
+  },
+] as const;
+
 const PROFESSIONALS = [
   {
     email: 'lucas@automatize.dev',
@@ -685,6 +763,17 @@ async function main() {
   }
   console.log(`  creators: ${creators.size}`);
 
+  // --- Founding creators ----------------------------------------------------
+  for (const email of FOUNDING_CREATOR_EMAILS) {
+    const userId = creators.get(email);
+    if (!userId) continue;
+    await db.profile.update({
+      where: { userId },
+      data: { isFoundingCreator: true },
+    });
+  }
+  console.log(`  founding creators: ${FOUNDING_CREATOR_EMAILS.length}`);
+
   // --- Professional profiles ----------------------------------------------
   for (const pro of PROFESSIONALS) {
     const userId = creators.get(pro.email);
@@ -879,6 +968,39 @@ async function main() {
     }
   }
   console.log(`  products: ${productIds.length}`);
+
+  // --- Partner companies ----------------------------------------------------
+  let companyCount = 0;
+  for (const co of COMPANIES) {
+    const company = await db.company.upsert({
+      where: { slug: co.slug },
+      create: {
+        slug: co.slug,
+        name: co.name,
+        tagline: co.tagline,
+        descriptionMd: co.descriptionMd,
+        website: co.website,
+        location: co.location,
+        featured: co.featured,
+      },
+      update: {
+        tagline: co.tagline,
+        descriptionMd: co.descriptionMd,
+        featured: co.featured,
+      },
+      select: { id: true },
+    });
+    companyCount += 1;
+
+    // Products keep their individual author — this only adds the storefront
+    // attribution, and only for slugs that exist (a product list edited
+    // without touching this one should not break the seed).
+    await db.product.updateMany({
+      where: { slug: { in: [...co.productSlugs] } },
+      data: { companyId: company.id },
+    });
+  }
+  console.log(`  partner companies: ${companyCount}`);
 
   // --- Affiliate programmes -----------------------------------------------
   // Roughly half the paid catalogue opens a programme, at rates that differ
